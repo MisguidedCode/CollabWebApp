@@ -3,6 +3,8 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../store';
 import { TaskColumn, TaskStatus } from '../types/task';
 import TaskCard from '../components/TaskCard';
+import {useState} from 'react';
+import TaskModal from '../components/TaskModal';
 
 const COLUMN_CONFIG: { id: TaskStatus; title: string }[] = [
   { id: 'todo', title: 'To Do' },
@@ -13,6 +15,7 @@ const COLUMN_CONFIG: { id: TaskStatus; title: string }[] = [
 
 const TasksPage = () => {
   const tasks = useSelector((state: RootState) => state.tasks.tasks);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   const columns: TaskColumn[] = useMemo(() => {
     return COLUMN_CONFIG.map(col => ({
@@ -22,11 +25,12 @@ const TasksPage = () => {
   }, [tasks]);
 
   return (
-    <div className="h-full">
+    <div className="h-full flex flex-col">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold text-gray-900">Tasks</h1>
         <button
           type="button"
+          onClick={() => setIsModalOpen(true)}
           className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
         >
           Create Task
@@ -50,6 +54,10 @@ const TasksPage = () => {
           </div>
         ))}
       </div>
+      <TaskModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
     </div>
   );
 };

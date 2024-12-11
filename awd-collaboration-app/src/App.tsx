@@ -3,6 +3,7 @@ import { Provider } from 'react-redux';
 import { store } from './store';
 import Layout from './components/Layout.tsx';
 import Dashboard from './pages/Dashboard';
+import TasksPage from './pages/Tasks';
 
 function App() {
   return (
@@ -11,6 +12,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
+            <Route path="tasks" element={<TasksPage />} />
           </Route>
         </Routes>
       </Router>

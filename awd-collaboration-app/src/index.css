@@ -5,10 +5,12 @@
 @layer base {
   body {
     @apply bg-gray-50 text-gray-900;
+    margin: 0;
+    min-height: 100vh;
   }
 }
 
-
+/*
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -78,3 +80,4 @@ button:focus-visible {
   }
 }
 
+*/

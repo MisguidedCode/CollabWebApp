@@ -1,12 +1,15 @@
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
+import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { Task } from '../types/task';
 
 interface TaskCardProps {
   task: Task;
+  onEdit: (task: Task) => void;
+  onDelete: (taskId: string) => void;
 }
 
-const TaskCard = ({ task }: TaskCardProps) => {
+const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
   const {
     attributes,
     listeners,
@@ -28,8 +31,31 @@ const TaskCard = ({ task }: TaskCardProps) => {
       style={style}
       {...attributes}
       {...listeners}
-      className="bg-white p-4 rounded-md shadow-sm border border-gray-200 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
+      className="relative bg-white p-4 rounded-md shadow-sm border border-gray-200 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group"
     >
+      {/* Add action buttons */}
+      <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(task);
+          }}
+          className="p-1 text-gray-400 hover:text-blue-500 rounded-full hover:bg-gray-100"
+        >
+          <PencilIcon className="h-4 w-4" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(task.id);
+          }}
+          className="p-1 text-gray-400 hover:text-red-500 rounded-full hover:bg-gray-100"
+        >
+          <TrashIcon className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Existing task content */}
       <div className="flex justify-between items-start">
         <h3 className="text-sm font-medium text-gray-900">{task.title}</h3>
         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${

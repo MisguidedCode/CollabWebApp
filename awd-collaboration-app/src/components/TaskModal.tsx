@@ -1,15 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDispatch } from 'react-redux';
-import { addTask } from '../store/slices/taskSlice';
+import { addTask, updateTask } from '../store/slices/taskSlice';
 import { Task, TaskPriority, TaskStatus } from '../types/task';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 
 interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
+  editTask?: Task; // Optional task for editing mode
 }
 
-const TaskModal = ({ isOpen, onClose }: TaskModalProps) => {
+const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
   const dispatch = useDispatch();
   const [formData, setFormData] = useState({
     title: '',
@@ -20,31 +21,52 @@ const TaskModal = ({ isOpen, onClose }: TaskModalProps) => {
     tags: '',
   });
 
+  // Populate form when editing existing task
+  useEffect(() => {
+    if (editTask) {
+      setFormData({
+        title: editTask.title,
+        description: editTask.description,
+        priority: editTask.priority,
+        status: editTask.status,
+        dueDate: editTask.dueDate || '',
+        tags: editTask.tags.join(', '),
+      });
+    } else {
+      // Reset form when creating new task
+      setFormData({
+        title: '',
+        description: '',
+        priority: 'medium',
+        status: 'todo',
+        dueDate: '',
+        tags: '',
+      });
+    }
+  }, [editTask]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const newTask: Task = {
-      id: crypto.randomUUID(),
+    const taskData: Task = {
+      id: editTask?.id || crypto.randomUUID(),
       title: formData.title,
       description: formData.description,
       priority: formData.priority,
       status: formData.status,
-      createdBy: 'user1', // This would come from auth context in real app
-      createdAt: new Date().toISOString(),
+      createdBy: editTask?.createdBy || 'user1', // This would come from auth context in real app
+      createdAt: editTask?.createdAt || new Date().toISOString(),
       dueDate: formData.dueDate || undefined,
       tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
     };
 
-    dispatch(addTask(newTask));
+    if (editTask) {
+      dispatch(updateTask(taskData));
+    } else {
+      dispatch(addTask(taskData));
+    }
+
     onClose();
-    setFormData({
-      title: '',
-      description: '',
-      priority: 'medium',
-      status: 'todo',
-      dueDate: '',
-      tags: '',
-    });
   };
 
   if (!isOpen) return null;
@@ -56,7 +78,9 @@ const TaskModal = ({ isOpen, onClose }: TaskModalProps) => {
 
         <div className="relative bg-white rounded-lg text-left overflow-hidden shadow-xl w-full max-w-lg">
           <div className="flex items-center justify-between p-4 border-b">
-            <h3 className="text-lg font-medium">Create New Task</h3>
+            <h3 className="text-lg font-medium">
+              {editTask ? 'Edit Task' : 'Create New Task'}
+            </h3>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-500"
@@ -152,7 +176,7 @@ const TaskModal = ({ isOpen, onClose }: TaskModalProps) => {
                 type="submit"
                 className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
-                Create Task
+                {editTask ? 'Update Task' : 'Create Task'}
               </button>
             </div>
           </form>

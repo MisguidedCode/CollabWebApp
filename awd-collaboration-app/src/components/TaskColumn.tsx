@@ -1,12 +1,14 @@
 import { useDroppable } from '@dnd-kit/core';
-import { TaskColumn as TaskColumnType } from '../types/task';
+import { TaskColumn as TaskColumnType, Task } from '../types/task';
 import TaskCard from './TaskCard';
 
 interface TaskColumnProps {
   column: TaskColumnType;
+  onEditTask: (task: Task) => void;
+  onDeleteTask: (taskId: string) => void;
 }
 
-const TaskColumn = ({ column }: TaskColumnProps) => {
+const TaskColumn = ({ column, onEditTask, onDeleteTask }: TaskColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({
     id: column.id,
   });
@@ -23,7 +25,12 @@ const TaskColumn = ({ column }: TaskColumnProps) => {
         }`}
       >
         {column.tasks.map(task => (
-          <TaskCard key={task.id} task={task} />
+          <TaskCard 
+            key={task.id} 
+            task={task} 
+            onEdit={onEditTask}
+            onDelete={onDeleteTask}
+          />
         ))}
       </div>
     </div>

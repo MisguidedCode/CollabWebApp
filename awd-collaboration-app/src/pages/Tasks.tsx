@@ -3,17 +3,16 @@ import { useDispatch, useSelector } from 'react-redux';
 import { 
   DndContext, 
   DragEndEvent, 
-  DragOverlay,
   useSensor,
   useSensors,
   PointerSensor,
   MouseSensor,
 } from '@dnd-kit/core';
 import { RootState } from '../store';
-import { TaskColumn as TaskColumnType, TaskStatus } from '../types/task';
+import { TaskColumn as TaskColumnType, Task, TaskStatus } from '../types/task';
 import TaskColumn from '../components/TaskColumn';
 import TaskModal from '../components/TaskModal';
-import { updateTaskStatus } from '../store/slices/taskSlice';
+import { updateTaskStatus, deleteTask } from '../store/slices/taskSlice';
 
 const COLUMN_CONFIG: { id: TaskStatus; title: string }[] = [
   { id: 'todo', title: 'To Do' },
@@ -26,6 +25,7 @@ const TasksPage = () => {
   const dispatch = useDispatch();
   const tasks = useSelector((state: RootState) => state.tasks.tasks);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
   
   const sensors = useSensors(
     useSensor(MouseSensor),
@@ -56,6 +56,22 @@ const TasksPage = () => {
     }
   };
 
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    if (window.confirm('Are you sure you want to delete this task?')) {
+      dispatch(deleteTask(taskId));
+    }
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingTask(undefined);
+  };
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex justify-between items-center mb-6">
@@ -75,14 +91,20 @@ const TasksPage = () => {
           onDragEnd={handleDragEnd}
         >
           {columns.map(column => (
-            <TaskColumn key={column.id} column={column} />
+            <TaskColumn 
+              key={column.id} 
+              column={column}
+              onEditTask={handleEditTask}
+              onDeleteTask={handleDeleteTask}
+            />
           ))}
         </DndContext>
       </div>
 
       <TaskModal 
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleCloseModal}
+        editTask={editingTask}
       />
     </div>
   );

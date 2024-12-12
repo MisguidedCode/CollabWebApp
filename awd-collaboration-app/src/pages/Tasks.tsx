@@ -1,10 +1,19 @@
-import { useMemo } from 'react';
-import { useSelector } from 'react-redux';
+import { useMemo, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { 
+  DndContext, 
+  DragEndEvent, 
+  DragOverlay,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  MouseSensor,
+} from '@dnd-kit/core';
 import { RootState } from '../store';
-import { TaskColumn, TaskStatus } from '../types/task';
-import TaskCard from '../components/TaskCard';
-import {useState} from 'react';
+import { TaskColumn as TaskColumnType, TaskStatus } from '../types/task';
+import TaskColumn from '../components/TaskColumn';
 import TaskModal from '../components/TaskModal';
+import { updateTaskStatus } from '../store/slices/taskSlice';
 
 const COLUMN_CONFIG: { id: TaskStatus; title: string }[] = [
   { id: 'todo', title: 'To Do' },
@@ -14,15 +23,38 @@ const COLUMN_CONFIG: { id: TaskStatus; title: string }[] = [
 ];
 
 const TasksPage = () => {
+  const dispatch = useDispatch();
   const tasks = useSelector((state: RootState) => state.tasks.tasks);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
-  const columns: TaskColumn[] = useMemo(() => {
+  const sensors = useSensors(
+    useSensor(MouseSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  const columns: TaskColumnType[] = useMemo(() => {
     return COLUMN_CONFIG.map(col => ({
       ...col,
       tasks: tasks.filter(task => task.status === col.id),
     }));
   }, [tasks]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over) return;
+
+    const taskId = active.id as string;
+    const newStatus = over.id as TaskStatus;
+
+    if (newStatus && taskId) {
+      dispatch(updateTaskStatus({ taskId, status: newStatus }));
+    }
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -37,23 +69,17 @@ const TasksPage = () => {
         </button>
       </div>
       
-      <div className="flex space-x-4 h-full">
-        {columns.map(column => (
-          <div
-            key={column.id}
-            className="flex flex-col w-80 bg-gray-50 rounded-lg"
-          >
-            <div className="p-4 font-medium text-gray-900 border-b border-gray-200">
-              {column.title} ({column.tasks.length})
-            </div>
-            <div className="flex-1 p-2 space-y-2 overflow-y-auto">
-              {column.tasks.map(task => (
-                <TaskCard key={task.id} task={task} />
-              ))}
-            </div>
-          </div>
-        ))}
+      <div className="flex-1 flex gap-4 min-h-0">
+        <DndContext 
+          sensors={sensors}
+          onDragEnd={handleDragEnd}
+        >
+          {columns.map(column => (
+            <TaskColumn key={column.id} column={column} />
+          ))}
+        </DndContext>
       </div>
+
       <TaskModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

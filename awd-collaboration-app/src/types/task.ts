@@ -1,5 +1,6 @@
 export type TaskPriority = 'low' | 'medium' | 'high';
 export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
+import { TaskAttachment } from './attachment';
 
 export interface Task {
   id: string;
@@ -12,6 +13,7 @@ export interface Task {
   createdAt: string;
   dueDate?: string;
   tags: string[];
+  attachments: TaskAttachment[];
 }
 
 export interface TaskColumn {

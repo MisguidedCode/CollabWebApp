@@ -3,11 +3,13 @@ import { useDispatch } from 'react-redux';
 import { addTask, updateTask } from '../store/slices/taskSlice';
 import { Task, TaskPriority, TaskStatus } from '../types/task';
 import { XMarkIcon } from '@heroicons/react/24/outline';
+import FileUpload from './attachments/FileUpload';
+import AttachmentList from './attachments/AttachmentList';
 
 interface TaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  editTask?: Task; // Optional task for editing mode
+  editTask?: Task;
 }
 
 const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
@@ -20,6 +22,7 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
     dueDate: '',
     tags: '',
   });
+  const [error, setError] = useState<string | null>(null);
 
   // Populate form when editing existing task
   useEffect(() => {
@@ -58,6 +61,7 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
       createdAt: editTask?.createdAt || new Date().toISOString(),
       dueDate: formData.dueDate || undefined,
       tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
+      attachments: editTask?.attachments || [], // Preserve existing attachments
     };
 
     if (editTask) {
@@ -67,6 +71,12 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
     }
 
     onClose();
+  };
+
+  const handleFileError = (errorMessage: string) => {
+    setError(errorMessage);
+    // Clear error after 3 seconds
+    setTimeout(() => setError(null), 3000);
   };
 
   if (!isOpen) return null;
@@ -90,6 +100,12 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
           </div>
 
           <form onSubmit={handleSubmit} className="p-4">
+            {error && (
+              <div className="mb-4 p-2 bg-red-100 border border-red-400 text-red-700 rounded">
+                {error}
+              </div>
+            )}
+            
             <div className="space-y-4">
               <div>
                 <label htmlFor="title" className="block text-sm font-medium text-gray-700">
@@ -161,6 +177,24 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
                   onChange={(e) => setFormData(prev => ({ ...prev, tags: e.target.value }))}
                   placeholder="frontend, bug, feature"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Attachments
+                </label>
+                <div className="mt-1">
+                  <FileUpload
+                    taskId={editTask?.id || ''}
+                    onError={handleFileError}
+                  />
+                </div>
+                {editTask?.attachments && editTask.attachments.length > 0 && (
+                  <AttachmentList
+                    taskId={editTask.id}
+                    attachments={editTask.attachments}
+                  />
+                )}
               </div>
             </div>
 

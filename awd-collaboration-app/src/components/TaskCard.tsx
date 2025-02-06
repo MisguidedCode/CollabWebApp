@@ -1,6 +1,6 @@
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon, PaperClipIcon } from '@heroicons/react/24/outline';
 import { Task } from '../types/task';
 
 interface TaskCardProps {
@@ -33,7 +33,7 @@ const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
       {...listeners}
       className="relative bg-white p-4 rounded-md shadow-sm border border-gray-200 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group"
     >
-      {/* Add action buttons */}
+      {/* Action buttons */}
       <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={(e) => {
@@ -55,7 +55,7 @@ const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
         </button>
       </div>
 
-      {/* Existing task content */}
+      {/* Task content */}
       <div className="flex justify-between items-start">
         <h3 className="text-sm font-medium text-gray-900">{task.title}</h3>
         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
@@ -68,12 +68,16 @@ const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
           {task.priority}
         </span>
       </div>
+      
       <p className="mt-1 text-sm text-gray-600 line-clamp-2">{task.description}</p>
+      
       {task.dueDate && (
         <div className="mt-2 text-xs text-gray-500">
           Due: {new Date(task.dueDate).toLocaleDateString()}
         </div>
       )}
+
+      {/* Tags */}
       {task.tags.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {task.tags.map(tag => (
@@ -84,6 +88,14 @@ const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
               {tag}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* Attachments indicator */}
+      {task.attachments?.length > 0 && (
+        <div className="mt-2 flex items-center text-xs text-gray-500">
+          <PaperClipIcon className="h-4 w-4 mr-1" />
+          {task.attachments.length} attachment{task.attachments.length !== 1 ? 's' : ''}
         </div>
       )}
     </div>

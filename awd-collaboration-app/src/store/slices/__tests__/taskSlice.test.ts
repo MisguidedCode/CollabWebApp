@@ -22,6 +22,7 @@ import taskReducer, {
       createdBy: 'user1',
       createdAt: new Date().toISOString(),
       tags: ['test'],
+      attachments: [],
     };
   
     it('should handle initial state', () => {

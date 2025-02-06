@@ -13,6 +13,7 @@ describe('TaskCard', () => {
     createdBy: 'user1',
     createdAt: new Date().toISOString(),
     tags: ['test'],
+    attachments: [],
   };
 
   // Mock functions for onEdit and onDelete

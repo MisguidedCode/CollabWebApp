@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { Task, TaskStatus } from '../../types/task';
+import { TaskAttachment } from '../../types/attachment';
 
 interface TaskState {
   tasks: Task[];
@@ -18,6 +19,7 @@ const initialState: TaskState = {
       createdBy: 'user1',
       createdAt: new Date().toISOString(),
       tags: ['frontend', 'messaging'],
+      attachments: [], // Added attachments array
     },
     {
       id: '2',
@@ -29,6 +31,7 @@ const initialState: TaskState = {
       createdAt: new Date().toISOString(),
       dueDate: '2024-12-20',
       tags: ['design', 'ui'],
+      attachments: [], // Added attachments array
     },
     {
       id: '3',
@@ -39,6 +42,7 @@ const initialState: TaskState = {
       createdBy: 'user1',
       createdAt: new Date().toISOString(),
       tags: ['backend', 'setup'],
+      attachments: [], // Added attachments array
     },
     {
       id: '4',
@@ -49,6 +53,7 @@ const initialState: TaskState = {
       createdBy: 'user1',
       createdAt: new Date().toISOString(),
       tags: ['setup'],
+      attachments: [], // Added attachments array
     },
   ],
   loading: false,
@@ -60,14 +65,24 @@ const taskSlice = createSlice({
   initialState,
   reducers: {
     addTask: (state, action: PayloadAction<Task>) => {
-      state.tasks.push(action.payload);
+      state.tasks.push({
+        ...action.payload,
+        attachments: [] // Ensure new tasks have attachments array
+      });
     },
+
     updateTask: (state, action: PayloadAction<Task>) => {
       const index = state.tasks.findIndex(task => task.id === action.payload.id);
       if (index !== -1) {
-        state.tasks[index] = action.payload;
+        // Preserve attachments if not provided in the update
+        const existingAttachments = state.tasks[index].attachments || [];
+        state.tasks[index] = {
+          ...action.payload,
+          attachments: action.payload.attachments || existingAttachments
+        };
       }
     },
+
     updateTaskStatus: (
       state,
       action: PayloadAction<{ taskId: string; status: TaskStatus }>
@@ -77,11 +92,55 @@ const taskSlice = createSlice({
         task.status = action.payload.status;
       }
     },
+
     deleteTask: (state, action: PayloadAction<string>) => {
       state.tasks = state.tasks.filter(task => task.id !== action.payload);
+    },
+
+    // New attachment-related reducers
+    addTaskAttachment: (
+      state,
+      action: PayloadAction<{ taskId: string; attachment: TaskAttachment }>
+    ) => {
+      const task = state.tasks.find(t => t.id === action.payload.taskId);
+      if (task) {
+        task.attachments = task.attachments || [];
+        task.attachments.push(action.payload.attachment);
+      }
+    },
+
+    removeTaskAttachment: (
+      state,
+      action: PayloadAction<{ taskId: string; attachmentId: string }>
+    ) => {
+      const task = state.tasks.find(t => t.id === action.payload.taskId);
+      if (task && task.attachments) {
+        task.attachments = task.attachments.filter(
+          a => a.id !== action.payload.attachmentId
+        );
+      }
+    },
+
+    setLoading: (state, action: PayloadAction<boolean>) => {
+      state.loading = action.payload;
+    },
+
+    setError: (state, action: PayloadAction<string | null>) => {
+      state.error = action.payload;
+      state.loading = false;
     },
   },
 });
 
-export const { addTask, updateTask, updateTaskStatus, deleteTask } = taskSlice.actions;
+export const { 
+  addTask, 
+  updateTask, 
+  updateTaskStatus, 
+  deleteTask,
+  addTaskAttachment,
+  removeTaskAttachment,
+  setLoading,
+  setError
+} = taskSlice.actions;
+
 export default taskSlice.reducer;

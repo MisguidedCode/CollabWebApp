@@ -1,6 +1,6 @@
-import { DocumentIcon, PhotoIcon, ArchiveBoxIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { TaskAttachment } from '../../types/attachment';
-import { formatFileSize } from '../../utils/fileUtils';
+import { formatFileSize, getFileTypeInfo } from '../../utils/fileUtils';
 
 interface FilePreviewProps {
   attachment: TaskAttachment;
@@ -8,21 +8,14 @@ interface FilePreviewProps {
 }
 
 const FilePreview = ({ attachment, onDelete }: FilePreviewProps) => {
+  const { icon: Icon, label: fileTypeLabel, color } = getFileTypeInfo(attachment.fileType);
   const isImage = attachment.fileType.startsWith('image/');
-  const isPDF = attachment.fileType === 'application/pdf';
-
-  const getIcon = () => {
-    if (attachment.fileType.includes('archive')) return ArchiveBoxIcon;
-    if (attachment.fileType.includes('image')) return PhotoIcon;
-    return DocumentIcon;
-  };
-
-  const Icon = getIcon();
+  const uploadDate = new Date(attachment.uploadedAt).toLocaleDateString();
 
   return (
-    <div className="relative group">
+    <div className="group relative rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow">
       {isImage && attachment.downloadUrl ? (
-        <div className="relative w-full h-32 bg-gray-100 rounded-lg overflow-hidden">
+        <div className="aspect-video w-full rounded-t-lg overflow-hidden bg-gray-100">
           <img
             src={attachment.downloadUrl}
             alt={attachment.fileName}
@@ -30,34 +23,43 @@ const FilePreview = ({ attachment, onDelete }: FilePreviewProps) => {
           />
         </div>
       ) : (
-        <div className="flex items-center p-4 bg-gray-50 rounded-lg">
-          <Icon className="h-8 w-8 text-gray-400" />
-          <div className="ml-4 flex-1">
-            <h4 className="text-sm font-medium text-gray-900">
+        <div className="aspect-video w-full rounded-t-lg flex items-center justify-center bg-gray-50">
+          <Icon className={`h-16 w-16 ${color}`} />
+        </div>
+      )}
+      
+      <div className="p-4">
+        <div className="mb-2 flex items-start justify-between">
+          <div className="truncate">
+            <h4 className="text-sm font-medium text-gray-900 truncate" title={attachment.fileName}>
               {attachment.fileName}
             </h4>
-            <p className="text-sm text-gray-500">
-              {formatFileSize(attachment.fileSize)}
+            <p className="text-xs text-gray-500">
+              {fileTypeLabel} • {formatFileSize(attachment.fileSize)}
             </p>
           </div>
         </div>
-      )}
 
-      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-30 rounded-lg">
-        <div className="flex space-x-2">
-            <a
+        <div className="text-xs text-gray-500 mb-3">
+          Uploaded {uploadDate}
+        </div>
+
+        <div className="flex gap-2">
+          <a
             href={attachment.downloadUrl}
             download={attachment.fileName}
-            className="px-2 py-1 text-sm text-white bg-primary-600 rounded hover:bg-primary-700"
+            className="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md text-gray-700 bg-gray-50 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
           >
+            <ArrowDownTrayIcon className="h-4 w-4 mr-1" />
             Download
           </a>
           {onDelete && (
             <button
               onClick={() => onDelete(attachment)}
-              className="px-2 py-1 text-sm text-white bg-red-600 rounded hover:bg-red-700"
+              className="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              title="Delete attachment"
             >
-              Delete
+              <TrashIcon className="h-4 w-4" />
             </button>
           )}
         </div>

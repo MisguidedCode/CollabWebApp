@@ -15,9 +15,13 @@ export interface Chat {
   id: string;
   type: ChatType;
   name: string; // Channel name or user name for direct messages
+  description?: string;
   participants: string[]; // User IDs
-  lastMessage?: Message;
+  lastMessage?: Partial<Message>;
   unreadCount?: number;
+  createdAt?: string;
+  lastUpdated?: string;
+  meta?: Record<string, any>; // For storing additional metadata like user details for DMs
 }
 
 export interface ChatState {
@@ -26,4 +30,6 @@ export interface ChatState {
   currentChatId: string | null;
   loading: boolean;
   error: string | null;
+  chatUnsubscribe: (() => void) | null;
+  messageUnsubscribe: (() => void) | null;
 }

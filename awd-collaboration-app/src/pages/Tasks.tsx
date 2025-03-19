@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
   DndContext, 
@@ -12,7 +12,12 @@ import { RootState } from '../store';
 import { TaskColumn as TaskColumnType, Task, TaskStatus } from '../types/task';
 import TaskColumn from '../components/TaskColumn';
 import TaskModal from '../components/TaskModal';
-import { updateTaskStatus, deleteTask } from '../store/slices/taskSlice';
+import { 
+  fetchTasks, 
+  updateTaskStatusThunk, 
+  deleteTaskThunk,
+  unsubscribeTasks
+} from '../store/slices/taskSlice';
 
 const COLUMN_CONFIG: { id: TaskStatus; title: string }[] = [
   { id: 'todo', title: 'To Do' },
@@ -23,9 +28,20 @@ const COLUMN_CONFIG: { id: TaskStatus; title: string }[] = [
 
 const TasksPage = () => {
   const dispatch = useDispatch();
-  const tasks = useSelector((state: RootState) => state.tasks.tasks);
+  const { tasks, loading, error } = useSelector((state: RootState) => state.tasks);
+  const user = useSelector((state: RootState) => state.auth.user);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
+  
+  // Fetch tasks on component mount
+  useEffect(() => {
+    dispatch(fetchTasks());
+    
+    // Cleanup subscription on unmount
+    return () => {
+      dispatch(unsubscribeTasks());
+    };
+  }, [dispatch]);
   
   const sensors = useSensors(
     useSensor(MouseSensor),
@@ -52,7 +68,7 @@ const TasksPage = () => {
     const newStatus = over.id as TaskStatus;
 
     if (newStatus && taskId) {
-      dispatch(updateTaskStatus({ taskId, status: newStatus }));
+      dispatch(updateTaskStatusThunk({ taskId, status: newStatus }));
     }
   };
 
@@ -63,7 +79,7 @@ const TasksPage = () => {
 
   const handleDeleteTask = (taskId: string) => {
     if (window.confirm('Are you sure you want to delete this task?')) {
-      dispatch(deleteTask(taskId));
+      dispatch(deleteTaskThunk(taskId));
     }
   };
 
@@ -71,6 +87,23 @@ const TasksPage = () => {
     setIsModalOpen(false);
     setEditingTask(undefined);
   };
+
+  if (loading && tasks.length === 0) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4" role="alert">
+        <p className="font-bold">Error</p>
+        <p>{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">

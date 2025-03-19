@@ -2,6 +2,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
+import { getFirestore } from 'firebase/firestore';
 
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
@@ -21,7 +22,17 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
+export const db = getFirestore(app);
 
+// Storage paths
 export const STORAGE_PATHS = {
   TASK_ATTACHMENTS: 'task-attachments',
+} as const;
+
+// Firestore collection names
+export const COLLECTIONS = {
+  USERS: 'users',
+  TASKS: 'tasks',
+  CHATS: 'chats',
+  MESSAGES: 'messages',
 } as const;

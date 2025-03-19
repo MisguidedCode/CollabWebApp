@@ -1,15 +1,16 @@
 import { useState, FormEvent } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { PaperClipIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
 import { sendMessage } from '../../store/slices/chatSlice';
-import { RootState } from '../../store';
+import { RootState, useAppDispatch } from '../../store';
 
 interface MessageInputProps {
   chatId: string;
 }
 
 const MessageInput = ({ chatId }: MessageInputProps) => {
-  const dispatch = useDispatch();
+  // Use typed dispatch
+  const dispatch = useAppDispatch();
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const user = useSelector((state: RootState) => state.auth.user);

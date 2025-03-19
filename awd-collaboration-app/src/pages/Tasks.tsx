@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { 
   DndContext, 
   DragEndEvent, 
@@ -8,15 +8,14 @@ import {
   PointerSensor,
   MouseSensor,
 } from '@dnd-kit/core';
-import { RootState } from '../store';
+import { RootState, useAppDispatch } from '../store';
 import { TaskColumn as TaskColumnType, Task, TaskStatus } from '../types/task';
 import TaskColumn from '../components/TaskColumn';
 import TaskModal from '../components/TaskModal';
 import { 
   fetchTasks, 
   updateTaskStatusThunk, 
-  deleteTaskThunk,
-  unsubscribeTasks
+  deleteTaskThunk
 } from '../store/slices/taskSlice';
 
 const COLUMN_CONFIG: { id: TaskStatus; title: string }[] = [
@@ -27,21 +26,12 @@ const COLUMN_CONFIG: { id: TaskStatus; title: string }[] = [
 ];
 
 const TasksPage = () => {
-  const dispatch = useDispatch();
+  // Use typed dispatch
+  const dispatch = useAppDispatch();
   const { tasks, loading, error } = useSelector((state: RootState) => state.tasks);
   const user = useSelector((state: RootState) => state.auth.user);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
-  
-  // Fetch tasks on component mount
-  useEffect(() => {
-    dispatch(fetchTasks());
-    
-    // Cleanup subscription on unmount
-    return () => {
-      dispatch(unsubscribeTasks());
-    };
-  }, [dispatch]);
   
   const sensors = useSensors(
     useSensor(MouseSensor),

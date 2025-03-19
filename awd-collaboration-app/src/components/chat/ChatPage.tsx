@@ -1,38 +1,70 @@
 import { useEffect } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { RootState } from '../../store';
-import { fetchUserChats, setCurrentChat, unsubscribeAll } from '../../store/slices/chatSlice';
+import { useSelector } from 'react-redux';
+import { RootState, useAppDispatch } from '../../store';
+import { fetchUserChats, setCurrentChat } from '../../store/slices/chatSlice';
 import ChatList from './ChatList';
 import ChatWindow from './ChatWindow';
 
 const ChatPage = () => {
-  const dispatch = useDispatch();
-  const { activeChats, currentChatId, loading } = useSelector((state: RootState) => state.chat);
+  // Use typed dispatch
+  const dispatch = useAppDispatch();
+  const { activeChats, currentChatId, loading, error } = useSelector(
+    (state: RootState) => state.chat
+  );
   const user = useSelector((state: RootState) => state.auth.user);
 
-  // Fetch user's chats on component mount
+  // Manually fetch chats when needed
   useEffect(() => {
-    if (user) {
+    if (user && activeChats.length === 0) {
+      console.log('Explicitly fetching chats for user:', user.uid);
       dispatch(fetchUserChats(user.uid));
     }
-    
-    // Cleanup subscriptions on unmount
-    return () => {
-      dispatch(unsubscribeAll());
-    };
-  }, [user, dispatch]);
+  }, [dispatch, user, activeChats.length]);
 
   // Set first chat as active if none selected
   useEffect(() => {
     if (!currentChatId && activeChats.length > 0) {
+      console.log('Setting first chat as active:', activeChats[0].id);
       dispatch(setCurrentChat(activeChats[0].id));
     }
-  }, [currentChatId, activeChats, dispatch]);
+  }, [activeChats, currentChatId, dispatch]);
+
+  // Debug logs
+  useEffect(() => {
+    console.log('Chat state update:', {
+      activeChats, 
+      currentChatId, 
+      loading,
+      error,
+      chatCount: activeChats.length
+    });
+  }, [activeChats, currentChatId, loading, error]);
+
+  // Check for errors
+  if (error) {
+    return (
+      <div className="h-full flex items-center justify-center text-red-600">
+        <div className="text-center p-4 bg-red-100 rounded-lg">
+          <p className="font-bold">Error loading chats:</p>
+          <p>{error}</p>
+          <button 
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded"
+            onClick={() => dispatch(fetchUserChats(user?.uid || ''))}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading && activeChats.length === 0) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="text-center">
+          <div className="animate-spin inline-block rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          <p className="mt-4 text-gray-600">Loading chats...</p>
+        </div>
       </div>
     );
   }

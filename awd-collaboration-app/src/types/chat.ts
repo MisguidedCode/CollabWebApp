@@ -30,6 +30,4 @@ export interface ChatState {
   currentChatId: string | null;
   loading: boolean;
   error: string | null;
-  chatUnsubscribe: (() => void) | null;
-  messageUnsubscribe: (() => void) | null;
 }

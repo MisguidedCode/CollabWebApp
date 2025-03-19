@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { RootState } from '../../store';
+import { useSelector } from 'react-redux';
+import { RootState, useAppDispatch } from '../../store';
 import { Message } from '../../types/chat';
 import MessageInput from './MessageInput';
 import { fetchChatMessages } from '../../store/slices/chatSlice';
@@ -29,7 +29,8 @@ const ChatMessage = ({ message, currentUserId }: { message: Message; currentUser
 };
 
 const ChatWindow = () => {
-  const dispatch = useDispatch();
+  // Use typed dispatch
+  const dispatch = useAppDispatch();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { currentChatId, messages, activeChats, loading } = useSelector(
     (state: RootState) => state.chat

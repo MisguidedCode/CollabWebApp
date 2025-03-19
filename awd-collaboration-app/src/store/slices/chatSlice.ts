@@ -4,11 +4,16 @@ import {
   getUserChats,
   getChatMessages,
   sendMessage as sendMessageToFirestore,
-  createChannelChat,
   createDirectMessageChat,
   subscribeToUserChats,
   subscribeToChatMessages
 } from '../../services/chatService';
+import { createChannelChatEnhanced } from '../../services/createChannel';
+import { 
+  registerSubscription, 
+  unregisterSubscription,
+  unregisterSubscriptionsByPrefix
+} from '../../utils/subscriptionManager';
 
 const initialState: ChatState = {
   activeChats: [],
@@ -16,8 +21,6 @@ const initialState: ChatState = {
   currentChatId: null,
   loading: false,
   error: null,
-  chatUnsubscribe: null,
-  messageUnsubscribe: null,
 };
 
 // Async Thunks
@@ -25,16 +28,22 @@ export const fetchUserChats = createAsyncThunk(
   'chat/fetchUserChats',
   async (userId: string, { dispatch, rejectWithValue }) => {
     try {
+      console.log('Fetching chats for user:', userId);
       const chats = await getUserChats(userId);
+      console.log('Fetched chats:', chats);
       
-      // Setup real-time subscription
+      // Setup real-time subscription using the subscription manager
       const unsubscribe = subscribeToUserChats(userId, (updatedChats) => {
+        console.log('Real-time chat update received:', updatedChats);
         dispatch(setChats(updatedChats));
       });
       
-      dispatch(setChatUnsubscribe(unsubscribe));
+      // Store the unsubscribe function in our manager, not in Redux state
+      registerSubscription('chats', unsubscribe);
+      
       return chats;
     } catch (error) {
+      console.error('Error fetching chats:', error);
       return rejectWithValue((error as Error).message);
     }
   }
@@ -42,24 +51,24 @@ export const fetchUserChats = createAsyncThunk(
 
 export const fetchChatMessages = createAsyncThunk(
   'chat/fetchChatMessages',
-  async (chatId: string, { dispatch, getState, rejectWithValue }) => {
+  async (chatId: string, { dispatch, rejectWithValue }) => {
     try {
-      // Cancel any existing message subscription
-      const state = getState() as { chat: ChatState };
-      if (state.chat.messageUnsubscribe) {
-        state.chat.messageUnsubscribe();
-      }
+      // Clean up any existing message subscription first
+      unregisterSubscription(`messages-${chatId}`);
       
       const messages = await getChatMessages(chatId);
       
-      // Setup real-time subscription
+      // Setup real-time subscription for this chat's messages
       const unsubscribe = subscribeToChatMessages(chatId, (updatedMessages) => {
         dispatch(setMessages({ chatId, messages: updatedMessages }));
       });
       
-      dispatch(setMessageUnsubscribe(unsubscribe));
+      // Store the unsubscribe function in our manager, not in Redux state
+      registerSubscription(`messages-${chatId}`, unsubscribe);
+      
       return { chatId, messages };
     } catch (error) {
+      console.error('Error fetching messages:', error);
       return rejectWithValue((error as Error).message);
     }
   }
@@ -79,6 +88,7 @@ export const sendMessage = createAsyncThunk(
       const sentMessage = await sendMessageToFirestore(chatId, newMessage);
       return { chatId, message: sentMessage };
     } catch (error) {
+      console.error('Error sending message:', error);
       return rejectWithValue((error as Error).message);
     }
   }
@@ -88,8 +98,11 @@ export const createChannel = createAsyncThunk(
   'chat/createChannel',
   async ({ name, description, creatorId }: { name: string; description: string; creatorId: string }, { rejectWithValue }) => {
     try {
-      return await createChannelChat(name, description, creatorId);
+      console.log('Creating channel with enhanced function:', { name, description, creatorId });
+      // Use our enhanced channel creation function instead
+      return await createChannelChatEnhanced(name, description, creatorId);
     } catch (error) {
+      console.error('Error creating channel:', error);
       return rejectWithValue((error as Error).message);
     }
   }
@@ -111,10 +124,17 @@ export const createDirectMessage = createAsyncThunk(
     try {
       return await createDirectMessageChat(userId1, userId2, userName1, userName2);
     } catch (error) {
+      console.error('Error creating direct message:', error);
       return rejectWithValue((error as Error).message);
     }
   }
 );
+
+// Function to unsubscribe from all chat subscriptions - call this on cleanup
+export const unsubscribeAll = () => {
+  unregisterSubscriptionsByPrefix('chats');
+  unregisterSubscriptionsByPrefix('messages-');
+};
 
 const chatSlice = createSlice({
   name: 'chat',
@@ -133,33 +153,6 @@ const chatSlice = createSlice({
       state.messages[chatId] = messages;
     },
     
-    setChatUnsubscribe: (state, action: PayloadAction<() => void>) => {
-      // Clean up previous subscription if exists
-      if (state.chatUnsubscribe) {
-        state.chatUnsubscribe();
-      }
-      state.chatUnsubscribe = action.payload;
-    },
-    
-    setMessageUnsubscribe: (state, action: PayloadAction<() => void>) => {
-      // Clean up previous subscription if exists
-      if (state.messageUnsubscribe) {
-        state.messageUnsubscribe();
-      }
-      state.messageUnsubscribe = action.payload;
-    },
-    
-    unsubscribeAll: (state) => {
-      if (state.chatUnsubscribe) {
-        state.chatUnsubscribe();
-        state.chatUnsubscribe = null;
-      }
-      if (state.messageUnsubscribe) {
-        state.messageUnsubscribe();
-        state.messageUnsubscribe = null;
-      }
-    },
-    
     resetChatState: () => initialState,
   },
   extraReducers: (builder) => {
@@ -175,6 +168,7 @@ const chatSlice = createSlice({
     builder.addCase(fetchUserChats.rejected, (state, action) => {
       state.loading = false;
       state.error = action.payload as string;
+      console.error('fetchUserChats rejected with error:', action.payload);
     });
     
     // fetchChatMessages
@@ -201,14 +195,21 @@ const chatSlice = createSlice({
     builder.addCase(createChannel.pending, (state) => {
       state.loading = true;
       state.error = null;
+      console.log('createChannel.pending action dispatched');
     });
-    builder.addCase(createChannel.fulfilled, (state) => {
+    builder.addCase(createChannel.fulfilled, (state, action) => {
       state.loading = false;
-      // New chat will be added by subscription
+      console.log('createChannel.fulfilled with payload:', action.payload);
+      // Manually add the new channel to activeChats for immediate feedback
+      // It will be overwritten by the subscription, but this gives immediate UI update
+      if (!state.activeChats.some(chat => chat.id === action.payload.id)) {
+        state.activeChats = [...state.activeChats, action.payload];
+      }
     });
     builder.addCase(createChannel.rejected, (state, action) => {
       state.loading = false;
       state.error = action.payload as string;
+      console.error('createChannel.rejected with error:', action.payload);
     });
     
     // createDirectMessage
@@ -216,9 +217,12 @@ const chatSlice = createSlice({
       state.loading = true;
       state.error = null;
     });
-    builder.addCase(createDirectMessage.fulfilled, (state) => {
+    builder.addCase(createDirectMessage.fulfilled, (state, action) => {
       state.loading = false;
-      // New chat will be added by subscription
+      // Manually add the new DM to activeChats
+      if (!state.activeChats.some(chat => chat.id === action.payload.id)) {
+        state.activeChats = [...state.activeChats, action.payload];
+      }
     });
     builder.addCase(createDirectMessage.rejected, (state, action) => {
       state.loading = false;
@@ -231,9 +235,6 @@ export const {
   setCurrentChat,
   setChats,
   setMessages,
-  setChatUnsubscribe,
-  setMessageUnsubscribe,
-  unsubscribeAll,
   resetChatState
 } = chatSlice.actions;
 

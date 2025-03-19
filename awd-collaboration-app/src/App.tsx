@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Provider, useSelector, useDispatch } from 'react-redux';
+import { Provider, useSelector } from 'react-redux';
 import { store } from './store';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -9,18 +9,22 @@ import ChatPage from './components/chat/ChatPage';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import ProtectedRoute from './components/auth/ProtectedRoute';
-import { RootState } from './store';
+import { RootState, useAppDispatch } from './store';
 import { fetchTasks, unsubscribeTasks } from './store/slices/taskSlice';
 import { fetchUserChats, unsubscribeAll } from './store/slices/chatSlice';
+import { unregisterAllSubscriptions } from './utils/subscriptionManager';
 
 const AppContent = () => {
-  const dispatch = useDispatch();
+  // Use the typed dispatch instead of the regular one
+  const dispatch = useAppDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
   const authLoading = useSelector((state: RootState) => state.auth.loading);
 
   // Initialize and cleanup global Firestore subscriptions
   useEffect(() => {
     if (user && !authLoading) {
+      console.log('Setting up global subscriptions for user:', user.uid);
+      
       // Initialize tasks subscription
       dispatch(fetchTasks());
       
@@ -30,8 +34,11 @@ const AppContent = () => {
     
     // Cleanup subscriptions when the component unmounts
     return () => {
-      dispatch(unsubscribeTasks());
-      dispatch(unsubscribeAll());
+      console.log('Cleaning up all subscriptions');
+      unsubscribeTasks();
+      unsubscribeAll();
+      // For extra safety, unregister all subscriptions
+      unregisterAllSubscriptions();
     };
   }, [user, authLoading, dispatch]);
 

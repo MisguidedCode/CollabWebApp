@@ -9,19 +9,21 @@ import {
   deleteTaskFromFirestore,
   subscribeToTasks
 } from '../../services/taskService';
+import { 
+  registerSubscription, 
+  unregisterSubscriptionsByPrefix 
+} from '../../utils/subscriptionManager';
 
 interface TaskState {
   tasks: Task[];
   loading: boolean;
   error: string | null;
-  unsubscribe: (() => void) | null;
 }
 
 const initialState: TaskState = {
   tasks: [],
   loading: false,
   error: null,
-  unsubscribe: null,
 };
 
 // Async Thunks
@@ -31,12 +33,14 @@ export const fetchTasks = createAsyncThunk(
     try {
       const tasks = await getAllTasksFromFirestore();
       
-      // Setup real-time subscription
+      // Setup real-time subscription using the subscription manager
       const unsubscribe = subscribeToTasks((updatedTasks) => {
         dispatch(setTasks(updatedTasks));
       });
       
-      dispatch(setUnsubscribe(unsubscribe));
+      // Store the unsubscribe function in our manager, not in Redux state
+      registerSubscription('tasks', unsubscribe);
+      
       return tasks;
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -91,27 +95,17 @@ export const deleteTaskThunk = createAsyncThunk(
   }
 );
 
+// Function to unsubscribe from task updates - call this on cleanup
+export const unsubscribeTasks = () => {
+  unregisterSubscriptionsByPrefix('tasks');
+};
+
 const taskSlice = createSlice({
   name: 'tasks',
   initialState,
   reducers: {
     setTasks: (state, action: PayloadAction<Task[]>) => {
       state.tasks = action.payload;
-    },
-    
-    setUnsubscribe: (state, action: PayloadAction<() => void>) => {
-      // Clean up previous subscription if exists
-      if (state.unsubscribe) {
-        state.unsubscribe();
-      }
-      state.unsubscribe = action.payload;
-    },
-    
-    unsubscribeTasks: (state) => {
-      if (state.unsubscribe) {
-        state.unsubscribe();
-        state.unsubscribe = null;
-      }
     },
 
     // Local state updates for attachments - database updates handled in services
@@ -208,8 +202,6 @@ const taskSlice = createSlice({
 
 export const { 
   setTasks,
-  setUnsubscribe,
-  unsubscribeTasks,
   addTaskAttachment,
   removeTaskAttachment,
   setLoading,
@@ -217,8 +209,9 @@ export const {
 } = taskSlice.actions;
 
 // For backwards compatibility with existing code
-export const { addTaskAttachment: addTask, removeTaskAttachment: deleteTask } = taskSlice.actions;
+export const addTask = createTaskThunk;
 export const updateTask = updateTaskThunk;
 export const updateTaskStatus = updateTaskStatusThunk;
+export const deleteTask = deleteTaskThunk;
 
 export default taskSlice.reducer;

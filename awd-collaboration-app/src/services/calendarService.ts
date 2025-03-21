@@ -60,9 +60,17 @@ import {
     toFirestore: (event: CalendarEvent) => {
       const { id, ...eventData } = event;
       
+      // Create a copy of the event data and remove all undefined fields
+      const cleanedData = Object.entries(eventData).reduce((acc, [key, value]) => {
+        if (value !== undefined) {
+          acc[key] = value;
+        }
+        return acc;
+      }, {} as Record<string, any>);
+      
       // Convert ISO strings to Firestore timestamps
       return {
-        ...eventData,
+        ...cleanedData,
         start: event.start ? Timestamp.fromDate(new Date(event.start)) : serverTimestamp(),
         end: event.end ? Timestamp.fromDate(new Date(event.end)) : serverTimestamp(),
         createdAt: event.createdAt ? Timestamp.fromDate(new Date(event.createdAt)) : serverTimestamp(),

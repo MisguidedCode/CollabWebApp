@@ -126,6 +126,25 @@ const calendarSlice = createSlice({
       state.currentDate = action.payload;
     },
     
+    // New reducers for optimistic updates
+    addEventLocally: (state, action: PayloadAction<CalendarEvent>) => {
+      // Add event to the state immediately, before Firestore confirms
+      state.events.push(action.payload);
+    },
+    
+    updateEventLocally: (state, action: PayloadAction<CalendarEvent>) => {
+      // Update event in the state immediately, before Firestore confirms
+      const index = state.events.findIndex(event => event.id === action.payload.id);
+      if (index !== -1) {
+        state.events[index] = action.payload;
+      }
+    },
+    
+    removeEventLocally: (state, action: PayloadAction<string>) => {
+      // Remove event from the state immediately, before Firestore confirms
+      state.events = state.events.filter(event => event.id !== action.payload);
+    },
+    
     resetCalendarState: () => initialState,
   },
   extraReducers: (builder) => {
@@ -176,13 +195,28 @@ const calendarSlice = createSlice({
       state.loading = true;
       state.error = null;
     });
-    builder.addCase(createEventThunk.fulfilled, (state) => {
-      // The new event will be added by the subscription
+    builder.addCase(createEventThunk.fulfilled, (state, action) => {
+      // The new event will be added by the subscription, but we'll update it here too
+      // Find and replace any optimistically added event with the same title and time
+      const eventToUpdate = state.events.findIndex(event => 
+        event.title === action.payload.title && 
+        event.start === action.payload.start && 
+        event.end === action.payload.end
+      );
+      
+      if (eventToUpdate !== -1) {
+        state.events[eventToUpdate] = action.payload;
+      } else {
+        // If we can't find a match (shouldn't happen with our optimistic updates), add it
+        state.events.push(action.payload);
+      }
+      
       state.loading = false;
     });
     builder.addCase(createEventThunk.rejected, (state, action) => {
       state.loading = false;
       state.error = action.payload as string;
+      // Could add logic here to remove the optimistically added event on failure
     });
     
     // updateEventThunk
@@ -190,13 +224,18 @@ const calendarSlice = createSlice({
       state.loading = true;
       state.error = null;
     });
-    builder.addCase(updateEventThunk.fulfilled, (state) => {
-      // The event will be updated by the subscription
+    builder.addCase(updateEventThunk.fulfilled, (state, action) => {
+      // The event will be updated by the subscription, but we'll update it here too
+      const index = state.events.findIndex(event => event.id === action.payload.id);
+      if (index !== -1) {
+        state.events[index] = action.payload;
+      }
       state.loading = false;
     });
     builder.addCase(updateEventThunk.rejected, (state, action) => {
       state.loading = false;
       state.error = action.payload as string;
+      // Could add logic here to revert the optimistic update on failure
     });
     
     // deleteEventThunk
@@ -204,13 +243,15 @@ const calendarSlice = createSlice({
       state.loading = true;
       state.error = null;
     });
-    builder.addCase(deleteEventThunk.fulfilled, (state) => {
-      // The event will be removed by the subscription
+    builder.addCase(deleteEventThunk.fulfilled, (state, action) => {
+      // The event will be removed by the subscription, but we'll remove it here too
+      state.events = state.events.filter(event => event.id !== action.payload);
       state.loading = false;
     });
     builder.addCase(deleteEventThunk.rejected, (state, action) => {
       state.loading = false;
       state.error = action.payload as string;
+      // Could add logic here to add back the optimistically removed event on failure
     });
   }
 });
@@ -219,6 +260,9 @@ export const {
   setEvents,
   setCurrentView,
   setCurrentDate,
+  addEventLocally,
+  updateEventLocally,
+  removeEventLocally,
   resetCalendarState
 } = calendarSlice.actions;
 

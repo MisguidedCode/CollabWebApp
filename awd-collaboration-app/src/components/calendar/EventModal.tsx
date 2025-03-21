@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { RootState, useAppDispatch } from '../../store';
-import { createEventThunk, updateEventThunk, deleteEventThunk } from '../../store/slices/calendarSlice';
+import { createEventThunk, updateEventThunk, deleteEventThunk, addEventLocally, updateEventLocally, removeEventLocally } from '../../store/slices/calendarSlice';
 import { CalendarEvent } from '../../types/calendar';
 
 interface EventModalProps {
@@ -142,8 +142,14 @@ const EventModal = ({ isOpen, onClose, event, selectedDate }: EventModalProps) =
       };
       
       if (event) {
+        // Update the event locally in Redux first (optimistic update)
+        dispatch(updateEventLocally(eventData));
+        // Then update in Firestore
         await dispatch(updateEventThunk(eventData)).unwrap();
       } else {
+        // Add the new event locally in Redux first (optimistic update)
+        dispatch(addEventLocally(eventData));
+        // Then create in Firestore (which might update the ID if we're using Firestore's auto-ID)
         const { id, ...newEventData } = eventData;
         await dispatch(createEventThunk(newEventData)).unwrap();
       }
@@ -164,6 +170,9 @@ const EventModal = ({ isOpen, onClose, event, selectedDate }: EventModalProps) =
     setIsSubmitting(true);
     
     try {
+      // Remove the event locally in Redux first (optimistic update)
+      dispatch(removeEventLocally(event.id));
+      // Then delete from Firestore
       await dispatch(deleteEventThunk(event.id)).unwrap();
       onClose();
     } catch (err) {

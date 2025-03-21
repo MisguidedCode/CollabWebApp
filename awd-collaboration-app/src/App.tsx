@@ -6,12 +6,14 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import TasksPage from './pages/Tasks';
 import ChatPage from './components/chat/ChatPage';
+import CalendarPage from './pages/Calendar'; // Import CalendarPage
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import { RootState, useAppDispatch } from './store';
 import { fetchTasks, unsubscribeTasks } from './store/slices/taskSlice';
 import { fetchUserChats, unsubscribeAll } from './store/slices/chatSlice';
+import { fetchUserEventsThunk, unsubscribeCalendarEvents } from './store/slices/calendarSlice'; // Import calendar actions
 import { unregisterAllSubscriptions } from './utils/subscriptionManager';
 
 const AppContent = () => {
@@ -30,6 +32,9 @@ const AppContent = () => {
       
       // Initialize chats subscription
       dispatch(fetchUserChats(user.uid));
+      
+      // Initialize calendar events subscription
+      dispatch(fetchUserEventsThunk(user.uid));
     }
     
     // Cleanup subscriptions when the component unmounts
@@ -37,6 +42,7 @@ const AppContent = () => {
       console.log('Cleaning up all subscriptions');
       unsubscribeTasks();
       unsubscribeAll();
+      unsubscribeCalendarEvents();
       // For extra safety, unregister all subscriptions
       unregisterAllSubscriptions();
     };
@@ -55,6 +61,7 @@ const AppContent = () => {
             <Route path="/" element={<Dashboard />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/chat" element={<ChatPage />} />
+            <Route path="/calendar" element={<CalendarPage />} />
           </Route>
         </Route>
 

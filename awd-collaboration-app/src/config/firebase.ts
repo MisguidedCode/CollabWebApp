@@ -1,4 +1,3 @@
-// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
@@ -35,4 +34,5 @@ export const COLLECTIONS = {
   TASKS: 'tasks',
   CHATS: 'chats',
   MESSAGES: 'messages',
+  EVENTS: 'events',
 } as const;

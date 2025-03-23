@@ -1,11 +1,18 @@
 import { NavLink } from 'react-router-dom';
-import { HomeIcon, ClipboardDocumentListIcon, ChatBubbleLeftRightIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { 
+  HomeIcon, 
+  ClipboardDocumentListIcon, 
+  ChatBubbleLeftRightIcon, 
+  CalendarIcon, 
+  UsersIcon 
+} from '@heroicons/react/24/outline';
 
 const navigation = [
   { name: 'Dashboard', path: '/', icon: HomeIcon },
   { name: 'Tasks', path: '/tasks', icon: ClipboardDocumentListIcon },
   { name: 'Chat', path: '/chat', icon: ChatBubbleLeftRightIcon },
   { name: 'Calendar', path: '/calendar', icon: CalendarIcon },
+  { name: 'Workspaces', path: '/workspaces/manage', icon: UsersIcon }, // Added Workspaces link
 ];
 
 const Sidebar = () => {

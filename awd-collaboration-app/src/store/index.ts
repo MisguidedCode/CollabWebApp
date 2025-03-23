@@ -2,7 +2,8 @@ import { configureStore } from '@reduxjs/toolkit';
 import taskReducer from './slices/taskSlice';
 import chatReducer from './slices/chatSlice';
 import authReducer from './slices/authSlice';
-import calendarReducer from './slices/calendarSlice'; // Import calendar reducer
+import calendarReducer from './slices/calendarSlice';
+import workspaceReducer from './slices/workspaceSlice'; // Import workspace reducer
 import { useDispatch } from 'react-redux';
 import { isPlainObject } from '@reduxjs/toolkit';
 
@@ -23,7 +24,8 @@ export const store = configureStore({
     tasks: taskReducer,
     chat: chatReducer,
     auth: authReducer,
-    calendar: calendarReducer, // Add calendar reducer
+    calendar: calendarReducer,
+    workspace: workspaceReducer, // Add workspace reducer
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

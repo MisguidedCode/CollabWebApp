@@ -6,14 +6,30 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import TasksPage from './pages/Tasks';
 import ChatPage from './components/chat/ChatPage';
-import CalendarPage from './pages/Calendar'; // Import CalendarPage
+import CalendarPage from './pages/Calendar';
+
+// Auth components
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+
+// Workspace components
+import CreateWorkspace from './components/workspace/CreateWorkspace';
+import WorkspaceSettings from './components/workspace/WorkspaceSettings';
+import WorkspaceMembers from './components/workspace/WorkspaceMembers';
+import WorkspaceManagement from './pages/WorkspaceManagement';
+import WorkspaceInvitationPage from './pages/WorkspaceInvitation';
+
+// Redux state and actions
 import { RootState, useAppDispatch } from './store';
 import { fetchTasks, unsubscribeTasks } from './store/slices/taskSlice';
 import { fetchUserChats, unsubscribeAll } from './store/slices/chatSlice';
-import { fetchUserEventsThunk, unsubscribeCalendarEvents } from './store/slices/calendarSlice'; // Import calendar actions
+import { fetchUserEventsThunk, unsubscribeCalendarEvents } from './store/slices/calendarSlice';
+import { 
+  fetchUserWorkspaces, 
+  fetchUserInvitations, 
+  unsubscribeWorkspaces 
+} from './store/slices/workspaceSlice';
 import { unregisterAllSubscriptions } from './utils/subscriptionManager';
 
 const AppContent = () => {
@@ -35,6 +51,14 @@ const AppContent = () => {
       
       // Initialize calendar events subscription
       dispatch(fetchUserEventsThunk(user.uid));
+      
+      // Initialize workspaces subscription
+      dispatch(fetchUserWorkspaces(user.uid));
+      
+      // Initialize workspace invitations subscription (if user has email)
+      if (user.email) {
+        dispatch(fetchUserInvitations(user.email));
+      }
     }
     
     // Cleanup subscriptions when the component unmounts
@@ -43,6 +67,7 @@ const AppContent = () => {
       unsubscribeTasks();
       unsubscribeAll();
       unsubscribeCalendarEvents();
+      unsubscribeWorkspaces();
       // For extra safety, unregister all subscriptions
       unregisterAllSubscriptions();
     };
@@ -62,6 +87,13 @@ const AppContent = () => {
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
+            
+            {/* Workspace routes */}
+            <Route path="/workspaces/create" element={<CreateWorkspace />} />
+            <Route path="/workspaces/manage" element={<WorkspaceManagement />} />
+            <Route path="/workspaces/:workspaceId/settings" element={<WorkspaceSettings />} />
+            <Route path="/workspaces/:workspaceId/members" element={<WorkspaceMembers />} />
+            <Route path="/invitations/:invitationId/:action" element={<WorkspaceInvitationPage />} />
           </Route>
         </Route>
 

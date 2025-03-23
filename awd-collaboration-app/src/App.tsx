@@ -33,10 +33,11 @@ import {
 import { unregisterAllSubscriptions } from './utils/subscriptionManager';
 
 const AppContent = () => {
-  // Use the typed dispatch instead of the regular one
+  // Use typed dispatch instead of the regular one
   const dispatch = useAppDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
   const authLoading = useSelector((state: RootState) => state.auth.loading);
+  const workspaces = useSelector((state: RootState) => state.workspace.workspaces);
 
   // Initialize and cleanup global Firestore subscriptions
   useEffect(() => {
@@ -52,8 +53,13 @@ const AppContent = () => {
       // Initialize calendar events subscription
       dispatch(fetchUserEventsThunk(user.uid));
       
-      // Initialize workspaces subscription
-      dispatch(fetchUserWorkspaces(user.uid));
+      // Initialize workspaces subscription - we now ensure this happens on login/reload
+      if (workspaces.length === 0) {
+        console.log('No workspaces in state, fetching from Firestore');
+        dispatch(fetchUserWorkspaces(user.uid));
+      } else {
+        console.log('Workspaces already in state:', workspaces.length);
+      }
       
       // Initialize workspace invitations subscription (if user has email)
       if (user.email) {
@@ -71,7 +77,7 @@ const AppContent = () => {
       // For extra safety, unregister all subscriptions
       unregisterAllSubscriptions();
     };
-  }, [user, authLoading, dispatch]);
+  }, [user, authLoading, dispatch, workspaces.length]);
 
   return (
     <Router>

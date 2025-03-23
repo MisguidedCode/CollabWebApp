@@ -1,5 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { User, AuthState } from '../../types/auth';
+import { clearWorkspaceState } from '../slices/workspaceSlice';
+import { AppDispatch } from '../index';
 
 const initialState: AuthState = {
   user: null,
@@ -31,5 +33,16 @@ const authSlice = createSlice({
   },
 });
 
-export const { setUser, setLoading, setError, logout } = authSlice.actions;
+// Export a thunk that will handle both authSlice.logout and workspaceSlice.clearWorkspaceState
+export const logoutUser = () => (dispatch: AppDispatch) => {
+  // First clear the workspace state
+  dispatch(clearWorkspaceState());
+  // Then logout the user
+  dispatch(authSlice.actions.logout());
+};
+
+export const { setUser, setLoading, setError } = authSlice.actions;
+// Export the original logout action for use within the auth slice
+export const { logout } = authSlice.actions;
+
 export default authSlice.reducer;

@@ -257,7 +257,17 @@ const workspaceSlice = createSlice({
       state.invitations = action.payload;
     },
     
+    // Modified: we'll only clear workspaces when explicitly called
     resetWorkspaceState: () => initialState,
+
+    // Added: separate function to clear only on logout
+    clearWorkspaceState: (state) => {
+      // This preserves workspaces in local storage but clears them from memory
+      return {
+        ...initialState,
+        loading: false
+      };
+    },
   },
   extraReducers: (builder) => {
     // fetchUserWorkspaces
@@ -426,7 +436,8 @@ export const {
   setWorkspaces,
   setCurrentWorkspace,
   setInvitations,
-  resetWorkspaceState
+  resetWorkspaceState,
+  clearWorkspaceState
 } = workspaceSlice.actions;
 
 export default workspaceSlice.reducer;

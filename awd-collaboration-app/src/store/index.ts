@@ -3,9 +3,10 @@ import taskReducer from './slices/taskSlice';
 import chatReducer from './slices/chatSlice';
 import authReducer from './slices/authSlice';
 import calendarReducer from './slices/calendarSlice';
-import workspaceReducer from './slices/workspaceSlice'; // Import workspace reducer
+import workspaceReducer from './slices/workspaceSlice';
 import { useDispatch } from 'react-redux';
 import { isPlainObject } from '@reduxjs/toolkit';
+import { saveState, loadState } from '../utils/storagePersistence';
 
 // Custom serializable check function to handle Firestore timestamps
 const isFirestoreTimestamp = (value: any): boolean => {
@@ -19,13 +20,26 @@ const isFirestoreTimestamp = (value: any): boolean => {
   );
 };
 
+// Load workspace state from localStorage if available
+const persistedWorkspaceState = loadState('workspaceState', {
+  workspaces: [],
+  currentWorkspaceId: null,
+  invitations: [],
+  loading: false,
+  error: null
+});
+
 export const store = configureStore({
   reducer: {
     tasks: taskReducer,
     chat: chatReducer,
     auth: authReducer,
     calendar: calendarReducer,
-    workspace: workspaceReducer, // Add workspace reducer
+    workspace: workspaceReducer, // This will use the initial state defined in the slice
+  },
+  preloadedState: {
+    // Preload the workspace state from localStorage
+    workspace: persistedWorkspaceState
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -71,6 +85,12 @@ export const store = configureStore({
         },
       },
     }),
+});
+
+// Subscribe to store changes to save workspace state to localStorage
+store.subscribe(() => {
+  const state = store.getState();
+  saveState('workspaceState', state.workspace);
 });
 
 export type RootState = ReturnType<typeof store.getState>;

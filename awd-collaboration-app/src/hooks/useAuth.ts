@@ -11,9 +11,11 @@ import { auth } from '../config/firebase';
 import { setUser, setLoading, setError, logout } from '../store/slices/authSlice';
 import { getUserData, createUserDocument, updateLastLogin } from '../services/userService';
 import { User } from '../types/auth';
+import { fetchUserWorkspaces, fetchUserInvitations } from '../store/slices/workspaceSlice';
+import { AppDispatch } from '../store';
 
 export const useAuth = () => {
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const [loading, setLocalLoading] = useState(true);
 
   useEffect(() => {
@@ -44,6 +46,12 @@ export const useAuth = () => {
           }
           
           dispatch(setUser(userData));
+
+          // Fetch workspaces and invitations after user authentication is confirmed
+          dispatch(fetchUserWorkspaces(firebaseUser.uid));
+          if (firebaseUser.email) {
+            dispatch(fetchUserInvitations(firebaseUser.email));
+          }
         } else {
           dispatch(logout());
         }

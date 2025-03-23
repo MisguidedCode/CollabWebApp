@@ -1,11 +1,14 @@
+
 import { useSelector } from 'react-redux';
 import { BellIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../hooks/useAuth';
-import { RootState } from '../store';
+import { RootState, useAppDispatch } from '../store';
 import { useState, useRef, useEffect } from 'react';
+import { logoutUser } from '../store/slices/authSlice';
 
 const Header = () => {
   const { signOut } = useAuth();
+  const dispatch = useAppDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -25,6 +28,8 @@ const Header = () => {
   const handleLogout = async () => {
     try {
       await signOut();
+      // Use our new thunk to ensure proper sequence of actions
+      dispatch(logoutUser());
     } catch (error) {
       console.error('Failed to logout:', error);
     }

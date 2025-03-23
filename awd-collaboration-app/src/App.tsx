@@ -8,6 +8,11 @@ import TasksPage from './pages/Tasks';
 import ChatPage from './components/chat/ChatPage';
 import CalendarPage from './pages/Calendar';
 
+// Document components
+import DocumentsPage from './pages/Documents';
+import DocumentEdit from './pages/DocumentEdit';
+import DocumentView from './pages/DocumentView';
+
 // Auth components
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
@@ -30,6 +35,10 @@ import {
   fetchUserInvitations, 
   unsubscribeWorkspaces 
 } from './store/slices/workspaceSlice';
+import {
+  fetchUserDocumentsThunk,
+  unsubscribeDocuments
+} from './store/slices/documentSlice';
 import { unregisterAllSubscriptions } from './utils/subscriptionManager';
 
 const AppContent = () => {
@@ -53,6 +62,9 @@ const AppContent = () => {
       // Initialize calendar events subscription
       dispatch(fetchUserEventsThunk(user.uid));
       
+      // Initialize documents subscription
+      dispatch(fetchUserDocumentsThunk(user.uid));
+      
       // Initialize workspaces subscription - we now ensure this happens on login/reload
       if (workspaces.length === 0) {
         console.log('No workspaces in state, fetching from Firestore');
@@ -74,6 +86,7 @@ const AppContent = () => {
       unsubscribeAll();
       unsubscribeCalendarEvents();
       unsubscribeWorkspaces();
+      unsubscribeDocuments();
       // For extra safety, unregister all subscriptions
       unregisterAllSubscriptions();
     };
@@ -93,6 +106,11 @@ const AppContent = () => {
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
+            
+            {/* Document routes */}
+            <Route path="/documents" element={<DocumentsPage />} />
+            <Route path="/documents/:documentId" element={<DocumentView />} />
+            <Route path="/documents/:documentId/edit" element={<DocumentEdit />} />
             
             {/* Workspace routes */}
             <Route path="/workspaces/create" element={<CreateWorkspace />} />

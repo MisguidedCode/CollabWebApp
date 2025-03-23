@@ -4,7 +4,8 @@ import {
   ClipboardDocumentListIcon, 
   ChatBubbleLeftRightIcon, 
   CalendarIcon, 
-  UsersIcon 
+  UsersIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -12,7 +13,8 @@ const navigation = [
   { name: 'Tasks', path: '/tasks', icon: ClipboardDocumentListIcon },
   { name: 'Chat', path: '/chat', icon: ChatBubbleLeftRightIcon },
   { name: 'Calendar', path: '/calendar', icon: CalendarIcon },
-  { name: 'Workspaces', path: '/workspaces/manage', icon: UsersIcon }, // Added Workspaces link
+  { name: 'Documents', path: '/documents', icon: DocumentTextIcon },
+  { name: 'Workspaces', path: '/workspaces/manage', icon: UsersIcon },
 ];
 
 const Sidebar = () => {

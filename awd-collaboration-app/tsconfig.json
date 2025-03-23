@@ -17,5 +17,5 @@
     "jsx": "react-jsx",
     "types": ["jest", "node"]
   },
-  "include": ["src"]
+  "include": ["src", "server"]
 }

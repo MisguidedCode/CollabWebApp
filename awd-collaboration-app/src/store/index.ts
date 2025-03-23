@@ -4,6 +4,7 @@ import chatReducer from './slices/chatSlice';
 import authReducer from './slices/authSlice';
 import calendarReducer from './slices/calendarSlice';
 import workspaceReducer from './slices/workspaceSlice';
+import documentReducer from './slices/documentSlice';
 import { useDispatch } from 'react-redux';
 import { isPlainObject } from '@reduxjs/toolkit';
 import { saveState, loadState } from '../utils/storagePersistence';
@@ -29,17 +30,29 @@ const persistedWorkspaceState = loadState('workspaceState', {
   error: null
 });
 
+// Load document state from localStorage if available
+const persistedDocumentState = loadState('documentState', {
+  documents: [],
+  currentDocument: null,
+  recentDocuments: [],
+  starredDocuments: [],
+  loading: false,
+  error: null
+});
+
 export const store = configureStore({
   reducer: {
     tasks: taskReducer,
     chat: chatReducer,
     auth: authReducer,
     calendar: calendarReducer,
-    workspace: workspaceReducer, // This will use the initial state defined in the slice
+    workspace: workspaceReducer,
+    documents: documentReducer,
   },
   preloadedState: {
-    // Preload the workspace state from localStorage
-    workspace: persistedWorkspaceState
+    // Preload states from localStorage
+    workspace: persistedWorkspaceState,
+    documents: persistedDocumentState
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -87,10 +100,11 @@ export const store = configureStore({
     }),
 });
 
-// Subscribe to store changes to save workspace state to localStorage
+// Subscribe to store changes to save states to localStorage
 store.subscribe(() => {
   const state = store.getState();
   saveState('workspaceState', state.workspace);
+  saveState('documentState', state.documents);
 });
 
 export type RootState = ReturnType<typeof store.getState>;

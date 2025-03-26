@@ -6,6 +6,7 @@ import { XMarkIcon } from '@heroicons/react/24/outline';
 import FileUpload from './attachments/FileUpload';
 import AttachmentList from './attachments/AttachmentList';
 import { RootState, useAppDispatch } from '../store';
+import { TaskAttachment } from '../types/attachment';
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface TaskModalProps {
 const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
   const dispatch = useAppDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
+  
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -26,10 +28,15 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
   });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Use local state to track attachments
+  const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
 
   // Populate form when editing existing task
   useEffect(() => {
     if (editTask) {
+      console.log("Initial task load:", editTask);
+      
       setFormData({
         title: editTask.title,
         description: editTask.description,
@@ -38,6 +45,9 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
         dueDate: editTask.dueDate || '',
         tags: editTask.tags.join(', '),
       });
+      
+      // Initialize attachments from the task
+      setAttachments(editTask.attachments || []);
     } else {
       // Reset form when creating new task
       setFormData({
@@ -48,8 +58,32 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
         dueDate: '',
         tags: '',
       });
+      setAttachments([]);
     }
   }, [editTask]);
+
+  // Called when file upload completes
+  const handleFileUploaded = (newAttachment: TaskAttachment) => {
+    console.log("New attachment uploaded:", newAttachment);
+    // Add the new attachment to our local state
+    setAttachments(prevAttachments => {
+      // Check if this attachment already exists
+      const exists = prevAttachments.some(att => att.id === newAttachment.id);
+      if (exists) {
+        return prevAttachments.map(att => 
+          att.id === newAttachment.id ? newAttachment : att
+        );
+      } else {
+        return [...prevAttachments, newAttachment];
+      }
+    });
+  };
+
+  // Handle attachment deletion
+  const handleAttachmentDeleted = (attachment: TaskAttachment) => {
+    console.log("Attachment deleted:", attachment);
+    setAttachments(prev => prev.filter(a => a.id !== attachment.id));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +97,9 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
     setError(null);
     
     try {
+      console.log("Submitting task with attachments:", attachments);
+      
+      // Create task data object
       const taskData: Task = {
         id: editTask?.id || crypto.randomUUID(),
         title: formData.title,
@@ -73,8 +110,8 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
         createdAt: editTask?.createdAt || new Date().toISOString(),
         dueDate: formData.dueDate || undefined,
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
-        attachments: editTask?.attachments || [],
-        assignedTo: editTask?.assignedTo || user.uid, // Default to current user
+        attachments: attachments, // Use our managed local state
+        assignedTo: editTask?.assignedTo || user.uid,
       };
 
       if (editTask) {
@@ -86,6 +123,7 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
 
       onClose();
     } catch (err) {
+      console.error("Error submitting task:", err);
       setError((err as Error).message);
     } finally {
       setIsSubmitting(false);
@@ -94,7 +132,6 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
 
   const handleFileError = (errorMessage: string) => {
     setError(errorMessage);
-    // Clear error after 3 seconds
     setTimeout(() => setError(null), 3000);
   };
 
@@ -224,12 +261,20 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
                     <FileUpload
                       taskId={editTask.id}
                       onError={handleFileError}
+                      onUploadComplete={(attachment) => handleFileUploaded(attachment)}
                     />
                   </div>
-                  {editTask.attachments && editTask.attachments.length > 0 && (
+                  
+                  {/* Display attachments count */}
+                  <div className="mt-2 text-xs text-gray-500">
+                    {attachments.length} attachment(s)
+                  </div>
+                  
+                  {attachments.length > 0 && (
                     <AttachmentList
                       taskId={editTask.id}
-                      attachments={editTask.attachments}
+                      attachments={attachments}
+                      onAttachmentDeleted={handleAttachmentDeleted}
                     />
                   )}
                 </div>

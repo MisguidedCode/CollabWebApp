@@ -42,6 +42,12 @@ const FilePreview = ({ attachment, onDelete }: FilePreviewProps) => {
 
         <div className="text-xs text-gray-500 mb-3">
           Uploaded {uploadDate}
+          {/* Display storage ID for debugging - remove in production */}
+          {process.env.NODE_ENV !== 'production' && (
+            <div className="text-xs text-gray-400 truncate mt-1" title={attachment.id}>
+              ID: {attachment.id}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-2">

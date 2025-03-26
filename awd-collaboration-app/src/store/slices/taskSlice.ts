@@ -108,15 +108,24 @@ const taskSlice = createSlice({
       state.tasks = action.payload;
     },
 
-    // Local state updates for attachments - database updates handled in services
+    // Improved attachment handling reducers
     addTaskAttachment: (
       state,
       action: PayloadAction<{ taskId: string; attachment: TaskAttachment }>
     ) => {
       const task = state.tasks.find(t => t.id === action.payload.taskId);
       if (task) {
+        // Ensure we have an attachments array
         task.attachments = task.attachments || [];
-        task.attachments.push(action.payload.attachment);
+        // Check if attachment already exists (by ID)
+        const existingIndex = task.attachments.findIndex(a => a.id === action.payload.attachment.id);
+        if (existingIndex >= 0) {
+          // Replace existing attachment
+          task.attachments[existingIndex] = action.payload.attachment;
+        } else {
+          // Add new attachment
+          task.attachments.push(action.payload.attachment);
+        }
       }
     },
 
@@ -126,6 +135,7 @@ const taskSlice = createSlice({
     ) => {
       const task = state.tasks.find(t => t.id === action.payload.taskId);
       if (task && task.attachments) {
+        // Filter out the attachment with the specified ID
         task.attachments = task.attachments.filter(
           a => a.id !== action.payload.attachmentId
         );
@@ -175,11 +185,39 @@ const taskSlice = createSlice({
       state.loading = true;
       state.error = null;
     });
-    builder.addCase(updateTaskThunk.fulfilled, (state) => {
+    builder.addCase(updateTaskThunk.fulfilled, (state, action) => {
       state.loading = false;
-      // Task will be updated by the subscription
+      
+      // Update the task in state instead of waiting for subscription
+      // This provides immediate UI feedback
+      const index = state.tasks.findIndex(task => task.id === action.payload.id);
+      if (index !== -1) {
+        // Make sure to preserve attachments if they exist
+        if (!action.payload.attachments && state.tasks[index].attachments) {
+          action.payload.attachments = state.tasks[index].attachments;
+        }
+        state.tasks[index] = action.payload;
+      }
     });
     builder.addCase(updateTaskThunk.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
+    });
+    
+    // updateTaskStatusThunk
+    builder.addCase(updateTaskStatusThunk.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(updateTaskStatusThunk.fulfilled, (state, action) => {
+      // Update the task status in the state for immediate UI feedback
+      const task = state.tasks.find(t => t.id === action.payload.taskId);
+      if (task) {
+        task.status = action.payload.status;
+      }
+      state.loading = false;
+    });
+    builder.addCase(updateTaskStatusThunk.rejected, (state, action) => {
       state.loading = false;
       state.error = action.payload as string;
     });
@@ -189,9 +227,10 @@ const taskSlice = createSlice({
       state.loading = true;
       state.error = null;
     });
-    builder.addCase(deleteTaskThunk.fulfilled, (state) => {
+    builder.addCase(deleteTaskThunk.fulfilled, (state, action) => {
+      // Remove the task from state immediately for better UI feedback
+      state.tasks = state.tasks.filter(task => task.id !== action.payload);
       state.loading = false;
-      // Task will be removed by the subscription
     });
     builder.addCase(deleteTaskThunk.rejected, (state, action) => {
       state.loading = false;

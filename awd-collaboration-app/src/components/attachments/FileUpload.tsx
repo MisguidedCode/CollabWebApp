@@ -2,10 +2,11 @@ import { ChangeEvent, useRef } from 'react';
 import { PaperClipIcon } from '@heroicons/react/24/outline';
 import { useTaskAttachment } from '../../hooks/useTaskAttachment';
 import { validateFile } from '../../utils/fileUtils';
+import { TaskAttachment } from '../../types/attachment';
 
 interface FileUploadProps {
   taskId: string;
-  onUploadComplete?: () => void;
+  onUploadComplete?: (attachment: TaskAttachment) => void;
   onError?: (error: string) => void;
 }
 
@@ -26,9 +27,15 @@ const FileUpload = ({ taskId, onUploadComplete, onError }: FileUploadProps) => {
     }
 
     try {
-      await uploadFile(file);
-      onUploadComplete?.();
+      const attachment = await uploadFile(file);
+      console.log("File uploaded successfully:", attachment);
+      
+      // Pass the attachment to the parent component
+      if (onUploadComplete) {
+        onUploadComplete(attachment);
+      }
     } catch (error) {
+      console.error("Upload failed:", error);
       onError?.(error instanceof Error ? error.message : 'Upload failed');
     }
 

@@ -5,14 +5,22 @@ import { useTaskAttachment } from '../../hooks/useTaskAttachment';
 interface AttachmentListProps {
   taskId: string;
   attachments: TaskAttachment[];
+  onAttachmentDeleted?: (attachment: TaskAttachment) => void;
 }
 
-const AttachmentList = ({ taskId, attachments }: AttachmentListProps) => {
+const AttachmentList = ({ taskId, attachments, onAttachmentDeleted }: AttachmentListProps) => {
   const { deleteFile } = useTaskAttachment(taskId);
 
   const handleDelete = async (attachment: TaskAttachment) => {
     try {
-      await deleteFile(attachment.id, attachment.fileName);
+      // First notify the parent that this attachment is being deleted
+      // This allows for immediate UI update
+      if (onAttachmentDeleted) {
+        onAttachmentDeleted(attachment);
+      }
+      
+      // Then attempt to delete the actual file
+      await deleteFile(attachment.id, attachment.storedFileName || attachment.id);
     } catch (error) {
       console.error('Failed to delete attachment:', error);
     }

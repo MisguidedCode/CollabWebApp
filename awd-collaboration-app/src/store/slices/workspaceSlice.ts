@@ -246,15 +246,22 @@ const workspaceSlice = createSlice({
   initialState,
   reducers: {
     setWorkspaces: (state, action: PayloadAction<Workspace[]>) => {
-      // Always use Firestore data directly
-      state.workspaces = action.payload;
+      console.log("Setting workspaces with payload:", action.payload);
+      
+      // Deduplicate workspaces based on ID
+      const uniqueWorkspaces = Array.from(
+        new Map(action.payload.map(workspace => [workspace.id, workspace])).values()
+      );
       
       // Sort workspaces for consistency
-      state.workspaces.sort((a, b) => a.name.localeCompare(b.name));
+      uniqueWorkspaces.sort((a, b) => a.name.localeCompare(b.name));
+      
+      // Update state with deduplicated workspaces
+      state.workspaces = uniqueWorkspaces;
       
       // If current workspace is not in the new list, reset it
-      if (state.currentWorkspaceId && !action.payload.some(w => w.id === state.currentWorkspaceId)) {
-        state.currentWorkspaceId = action.payload.length > 0 ? action.payload[0].id : null;
+      if (state.currentWorkspaceId && !uniqueWorkspaces.some(w => w.id === state.currentWorkspaceId)) {
+        state.currentWorkspaceId = uniqueWorkspaces.length > 0 ? uniqueWorkspaces[0].id : null;
       }
     },
     
@@ -279,17 +286,17 @@ const workspaceSlice = createSlice({
       state.error = null;
     });
     builder.addCase(fetchUserWorkspaces.fulfilled, (state, action) => {
-      // Only use workspaces from Firestore
-      state.workspaces = action.payload;
-      
-      // Sort workspaces by name for consistency
+      // Use setWorkspaces reducer to deduplicate
+      const uniqueWorkspaces = Array.from(
+        new Map(action.payload.map(workspace => [workspace.id, workspace])).values()
+      );
+      state.workspaces = uniqueWorkspaces;
       state.workspaces.sort((a, b) => a.name.localeCompare(b.name));
-      
       state.loading = false;
       
       // Set first workspace as current if none selected
-      if (!state.currentWorkspaceId && action.payload.length > 0) {
-        state.currentWorkspaceId = action.payload[0].id;
+      if (!state.currentWorkspaceId && uniqueWorkspaces.length > 0) {
+        state.currentWorkspaceId = uniqueWorkspaces[0].id;
       }
     });
     builder.addCase(fetchUserWorkspaces.rejected, (state, action) => {
@@ -317,7 +324,7 @@ const workspaceSlice = createSlice({
       state.error = null;
     });
     builder.addCase(createNewWorkspace.fulfilled, (state, action) => {
-      state.workspaces.push(action.payload);
+      // Don't push to workspaces array as the subscription will handle it
       state.currentWorkspaceId = action.payload.id;
       state.loading = false;
     });
@@ -332,10 +339,7 @@ const workspaceSlice = createSlice({
       state.error = null;
     });
     builder.addCase(updateWorkspaceDetails.fulfilled, (state, action) => {
-      const index = state.workspaces.findIndex(workspace => workspace.id === action.payload.id);
-      if (index !== -1) {
-        state.workspaces[index] = action.payload;
-      }
+      // Subscription will handle the update
       state.loading = false;
     });
     builder.addCase(updateWorkspaceDetails.rejected, (state, action) => {
@@ -349,6 +353,7 @@ const workspaceSlice = createSlice({
       state.error = null;
     });
     builder.addCase(deleteWorkspaceThunk.fulfilled, (state, action) => {
+      // Filter out the deleted workspace
       state.workspaces = state.workspaces.filter(workspace => workspace.id !== action.payload);
       
       // If the deleted workspace was the current one, set to null or the first available
@@ -397,18 +402,7 @@ const workspaceSlice = createSlice({
       state.error = null;
     });
     builder.addCase(updateMemberRoleThunk.fulfilled, (state, action) => {
-      const { workspaceId, userId, role } = action.payload;
-      const workspaceIndex = state.workspaces.findIndex(w => w.id === workspaceId);
-      
-      if (workspaceIndex !== -1) {
-        state.workspaces[workspaceIndex].members = state.workspaces[workspaceIndex].members.map(member => {
-          if (member.userId === userId) {
-            return { ...member, role };
-          }
-          return member;
-        });
-      }
-      
+      // Subscription will handle the update
       state.loading = false;
     });
     builder.addCase(updateMemberRoleThunk.rejected, (state, action) => {
@@ -422,15 +416,7 @@ const workspaceSlice = createSlice({
       state.error = null;
     });
     builder.addCase(removeMemberThunk.fulfilled, (state, action) => {
-      const { workspaceId, userId } = action.payload;
-      const workspaceIndex = state.workspaces.findIndex(w => w.id === workspaceId);
-      
-      if (workspaceIndex !== -1) {
-        state.workspaces[workspaceIndex].members = state.workspaces[workspaceIndex].members.filter(
-          member => member.userId !== userId
-        );
-      }
-      
+      // Subscription will handle the update
       state.loading = false;
     });
     builder.addCase(removeMemberThunk.rejected, (state, action) => {

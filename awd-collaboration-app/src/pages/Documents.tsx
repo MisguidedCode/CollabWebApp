@@ -30,14 +30,18 @@ const DocumentsPage: React.FC = () => {
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'recent' | 'starred'>('all');
   
+  const currentWorkspaceId = useSelector((state: RootState) => state.workspace.currentWorkspaceId);
+  const workspaces = useSelector((state: RootState) => state.workspace.workspaces);
+  const currentWorkspace = workspaces.find(w => w.id === currentWorkspaceId);
+
   // Fetch documents on mount
   useEffect(() => {
-    if (user) {
-      dispatch(fetchUserDocumentsThunk(user.uid));
-      dispatch(fetchSharedDocumentsThunk(user.uid));
+    if (user && currentWorkspaceId) {
+      dispatch(fetchUserDocumentsThunk({ workspaceId: currentWorkspaceId, userId: user.uid }));
+      dispatch(fetchSharedDocumentsThunk({ workspaceId: currentWorkspaceId, userId: user.uid }));
       dispatch(fetchRecentDocumentsThunk({ userId: user.uid, maxCount: 5 }));
     }
-  }, [dispatch, user]);
+  }, [dispatch, user, currentWorkspace]);
   
   // Filter starred documents
   const filteredStarredDocuments = documents.filter(doc => doc.starred);
@@ -47,6 +51,10 @@ const DocumentsPage: React.FC = () => {
     if (!user) return;
     
     try {
+      if (!currentWorkspaceId || !currentWorkspace) {
+        throw new Error('No workspace selected');
+      }
+
       // Create document metadata
       const newDocument: Omit<Document, 'id' | 'createdAt' | 'updatedAt'> = {
         title: `Untitled ${type} document`,
@@ -56,14 +64,22 @@ const DocumentsPage: React.FC = () => {
         status: 'draft',
         permissions: {
           owner: user.uid,
+          workspaceId: currentWorkspaceId,
           readers: [],
           editors: [],
           commenters: [],
           public: false
+        },
+        workspace: {
+          id: currentWorkspaceId,
+          name: currentWorkspace.name
         }
       };
       
-      const createdDocument = await dispatch(createDocumentThunk(newDocument)).unwrap();
+      const createdDocument = await dispatch(createDocumentThunk({ 
+        document: newDocument,
+        userId: user.uid 
+      })).unwrap();
       
       // Navigate to the document edit page
       navigate(`/documents/${createdDocument.id}/edit`);

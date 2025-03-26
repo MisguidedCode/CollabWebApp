@@ -33,10 +33,10 @@ const DocumentView: React.FC = () => {
   
   // Fetch document when component mounts
   useEffect(() => {
-    if (documentId) {
-      dispatch(fetchDocumentByIdThunk(documentId));
+    if (documentId && user) {
+      dispatch(fetchDocumentByIdThunk({ documentId, userId: user.uid }));
     }
-  }, [dispatch, documentId]);
+  }, [dispatch, documentId, user]);
   
   // Handle navigate back
   const handleBack = () => {

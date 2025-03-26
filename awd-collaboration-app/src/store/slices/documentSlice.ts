@@ -7,8 +7,8 @@ import {
 } from '../../types/document';
 import {
   createDocument as createDocumentInFirestore,
-  getUserDocuments,
-  getSharedDocuments,
+  getWorkspaceDocuments,
+  getSharedWorkspaceDocuments,
   getRecentDocuments,
   getDocumentById,
   updateDocument as updateDocumentInFirestore,
@@ -37,9 +37,9 @@ const initialState: DocumentState = {
 // Async Thunks
 export const fetchUserDocumentsThunk = createAsyncThunk(
   'documents/fetchUserDocuments',
-  async (userId: string, { rejectWithValue }) => {
+  async ({ workspaceId, userId }: { workspaceId: string; userId: string }, { rejectWithValue }) => {
     try {
-      return await getUserDocuments(userId);
+      return await getWorkspaceDocuments(workspaceId, userId);
     } catch (error) {
       return rejectWithValue((error as Error).message);
     }
@@ -48,9 +48,9 @@ export const fetchUserDocumentsThunk = createAsyncThunk(
 
 export const fetchSharedDocumentsThunk = createAsyncThunk(
   'documents/fetchSharedDocuments',
-  async (userId: string, { rejectWithValue }) => {
+  async ({ workspaceId, userId }: { workspaceId: string; userId: string }, { rejectWithValue }) => {
     try {
-      return await getSharedDocuments(userId);
+      return await getSharedWorkspaceDocuments(workspaceId, userId);
     } catch (error) {
       return rejectWithValue((error as Error).message);
     }
@@ -70,17 +70,19 @@ export const fetchRecentDocumentsThunk = createAsyncThunk(
 
 export const fetchDocumentByIdThunk = createAsyncThunk(
   'documents/fetchDocumentById',
-  async (documentId: string, { dispatch, rejectWithValue }) => {
+  async ({ documentId, userId }: { documentId: string; userId: string }, { dispatch, rejectWithValue }) => {
     try {
-      const document = await getDocumentById(documentId);
+      const document = await getDocumentById(documentId, userId);
       
       if (!document) {
         throw new Error('Document not found');
       }
       
       // Setup subscription for real-time updates
-      const unsubscribe = subscribeToDocument(documentId, (updatedDocument) => {
-        dispatch(updateCurrentDocument(updatedDocument));
+      const unsubscribe = await subscribeToDocument(documentId, userId, (updatedDocument: Document | null) => {
+        if (updatedDocument) {
+          dispatch(updateCurrentDocument(updatedDocument));
+        }
       });
       
       registerSubscription(`document-${documentId}`, unsubscribe);
@@ -94,9 +96,9 @@ export const fetchDocumentByIdThunk = createAsyncThunk(
 
 export const createDocumentThunk = createAsyncThunk(
   'documents/createDocument',
-  async (document: Omit<Document, 'id' | 'createdAt' | 'updatedAt'>, { rejectWithValue }) => {
+  async ({ document, userId }: { document: Omit<Document, 'id' | 'createdAt' | 'updatedAt'>; userId: string }, { rejectWithValue }) => {
     try {
-      return await createDocumentInFirestore(document);
+      return await createDocumentInFirestore(document, userId);
     } catch (error) {
       return rejectWithValue((error as Error).message);
     }
@@ -105,9 +107,9 @@ export const createDocumentThunk = createAsyncThunk(
 
 export const updateDocumentThunk = createAsyncThunk(
   'documents/updateDocument',
-  async (document: Document, { rejectWithValue }) => {
+  async ({ document, userId }: { document: Document; userId: string }, { rejectWithValue }) => {
     try {
-      await updateDocumentInFirestore(document);
+      await updateDocumentInFirestore(document, userId);
       return document;
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -117,9 +119,9 @@ export const updateDocumentThunk = createAsyncThunk(
 
 export const deleteDocumentThunk = createAsyncThunk(
   'documents/deleteDocument',
-  async (documentId: string, { rejectWithValue }) => {
+  async ({ documentId, userId }: { documentId: string; userId: string }, { rejectWithValue }) => {
     try {
-      await deleteDocumentFromFirestore(documentId);
+      await deleteDocumentFromFirestore(documentId, userId);
       return documentId;
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -132,14 +134,16 @@ export const uploadDocumentContentThunk = createAsyncThunk(
   async ({ 
     documentId, 
     content, 
+    userId,
     onProgress 
   }: { 
     documentId: string; 
-    content: string | Blob | File; 
+    content: string | Blob | File;
+    userId: string;
     onProgress?: (progress: number) => void 
   }, { rejectWithValue }) => {
     try {
-      const contentUrl = await uploadDocumentContent(documentId, content, onProgress);
+      const contentUrl = await uploadDocumentContent(documentId, content, userId);
       return { documentId, contentUrl };
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -151,16 +155,18 @@ export const addDocumentCommentThunk = createAsyncThunk(
   'documents/addDocumentComment',
   async ({ 
     documentId, 
-    comment 
+    comment,
+    userId 
   }: { 
     documentId: string; 
-    comment: Omit<DocumentComment, 'id' | 'createdAt'> 
+    comment: Omit<DocumentComment, 'id' | 'createdAt'>;
+    userId: string 
   }, { dispatch, rejectWithValue }) => {
     try {
-      const newComment = await addDocumentComment(documentId, comment);
+      const newComment = await addDocumentComment(documentId, comment, userId);
       
       // Setup subscription for comments if not already set up
-      const unsubscribe = subscribeToDocumentComments(documentId, (comments) => {
+      const unsubscribe = await subscribeToDocumentComments(documentId, userId, (comments: DocumentComment[]) => {
         dispatch(setDocumentComments({ documentId, comments }));
       });
       
@@ -178,14 +184,16 @@ export const resolveDocumentCommentThunk = createAsyncThunk(
   async ({ 
     documentId, 
     commentId, 
-    resolvedBy 
+    resolvedBy,
+    userId 
   }: { 
     documentId: string; 
     commentId: string; 
-    resolvedBy: string 
+    resolvedBy: string;
+    userId: string 
   }, { rejectWithValue }) => {
     try {
-      await resolveComment(documentId, commentId, resolvedBy);
+      await resolveComment(documentId, commentId, resolvedBy, userId);
       return { documentId, commentId, resolvedBy };
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -197,13 +205,15 @@ export const createDocumentVersionThunk = createAsyncThunk(
   'documents/createDocumentVersion',
   async ({ 
     documentId, 
-    version 
+    version,
+    userId 
   }: { 
     documentId: string; 
-    version: Omit<DocumentVersion, 'id' | 'createdAt'> 
+    version: Omit<DocumentVersion, 'id' | 'createdAt'>;
+    userId: string 
   }, { rejectWithValue }) => {
     try {
-      const newVersion = await createDocumentVersion(documentId, version);
+      const newVersion = await createDocumentVersion(documentId, version, userId);
       return { documentId, version: newVersion };
     } catch (error) {
       return rejectWithValue((error as Error).message);

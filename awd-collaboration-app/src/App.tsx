@@ -65,7 +65,10 @@ const AppContent = () => {
       });
       
       // Initialize documents subscription
-      dispatch(fetchUserDocumentsThunk(user.uid));
+      // Initialize documents subscription for each workspace
+      workspaces.forEach(workspace => {
+        dispatch(fetchUserDocumentsThunk({ workspaceId: workspace.id, userId: user.uid }));
+      });
       
       // Always initialize workspaces subscription on mount/refresh
       console.log('Initializing workspace subscriptions');

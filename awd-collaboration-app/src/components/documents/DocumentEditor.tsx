@@ -208,14 +208,18 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
       // Create a new version with HTML content
       await dispatch(uploadDocumentContentThunk({
         documentId: document.id,
-        content: htmlContent
+        content: htmlContent,
+        userId: user.uid,
       })).unwrap();
       
       // Update document metadata
       await dispatch(updateDocumentThunk({
-        ...document,
-        updatedBy: user.uid,
-        updatedAt: new Date().toISOString()
+        document: {
+          ...document,
+          updatedBy: user.uid,
+          updatedAt: new Date().toISOString()
+        },
+        userId: user.uid
       })).unwrap();
       
       // Call onSave callback if provided

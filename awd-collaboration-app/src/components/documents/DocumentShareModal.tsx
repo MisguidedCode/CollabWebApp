@@ -89,14 +89,17 @@ const DocumentShareModal: React.FC<DocumentShareModalProps> = ({ isOpen, onClose
     try {
       // Update document permissions
       await dispatch(updateDocumentThunk({
-        ...document,
-        permissions: {
-          ...document.permissions,
-          public: !isPrivate,
-          publicPermission: publicPermission,
+        document: {
+          ...document,
+          permissions: {
+            ...document.permissions,
+            public: !isPrivate,
+            publicPermission: publicPermission,
+          },
+          updatedBy: user.uid,
+          updatedAt: new Date().toISOString()
         },
-        updatedBy: user.uid,
-        updatedAt: new Date().toISOString()
+        userId: user.uid
       })).unwrap();
       
       setIsPrivate(isPrivate);
@@ -117,14 +120,17 @@ const DocumentShareModal: React.FC<DocumentShareModalProps> = ({ isOpen, onClose
     try {
       // Update document permissions
       await dispatch(updateDocumentThunk({
-        ...document,
-        permissions: {
-          ...document.permissions,
-          public: !isPrivate,
-          publicPermission: permission,
+        document: {
+          ...document,
+          permissions: {
+            ...document.permissions,
+            public: !isPrivate,
+            publicPermission: permission,
+          },
+          updatedBy: user.uid,
+          updatedAt: new Date().toISOString()
         },
-        updatedBy: user.uid,
-        updatedAt: new Date().toISOString()
+        userId: user.uid
       })).unwrap();
       
       setPublicPermission(permission);

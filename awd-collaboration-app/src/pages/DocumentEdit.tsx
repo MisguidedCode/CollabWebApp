@@ -29,10 +29,10 @@ const DocumentEditPage: React.FC = () => {
   
   // Fetch document when component mounts
   useEffect(() => {
-    if (documentId) {
-      dispatch(fetchDocumentByIdThunk(documentId));
+    if (documentId && user) {
+      dispatch(fetchDocumentByIdThunk({ documentId, userId: user.uid }));
     }
-  }, [dispatch, documentId]);
+  }, [dispatch, documentId, user]);
   
   // Update local title when document loads
   useEffect(() => {
@@ -60,10 +60,13 @@ const DocumentEditPage: React.FC = () => {
       
       try {
         await dispatch(updateDocumentThunk({
-          ...currentDocument,
-          title: documentTitle,
-          updatedBy: user.uid,
-          updatedAt: new Date().toISOString()
+          document: {
+            ...currentDocument,
+            title: documentTitle,
+            updatedBy: user.uid,
+            updatedAt: new Date().toISOString()
+          },
+          userId: user.uid
         })).unwrap();
       } catch (error) {
         console.error('Failed to update document title:', error);

@@ -1,13 +1,14 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
+import { RootState } from '../index';
 import { Task, TaskStatus } from '../../types/task';
 import { TaskAttachment } from '../../types/attachment';
 import {
   createTask as createTaskInFirestore,
-  getAllTasks as getAllTasksFromFirestore,
+  getWorkspaceTasks,
   updateTaskInFirestore,
   updateTaskStatusInFirestore,
   deleteTaskFromFirestore,
-  subscribeToTasks
+  subscribeToWorkspaceTasks
 } from '../../services/taskService';
 import { 
   registerSubscription, 
@@ -29,12 +30,21 @@ const initialState: TaskState = {
 // Async Thunks
 export const fetchTasks = createAsyncThunk(
   'tasks/fetchTasks',
-  async (_, { dispatch, rejectWithValue }) => {
+  async (_, { dispatch, getState, rejectWithValue }) => {
     try {
-      const tasks = await getAllTasksFromFirestore();
+      // Get current user and workspace from state
+      const state = getState() as RootState;
+      const userId = state.auth.user?.uid;
+      const workspaceId = state.workspace.currentWorkspaceId;
+
+      if (!userId || !workspaceId) {
+        throw new Error('User or workspace not selected');
+      }
+
+      const tasks = await getWorkspaceTasks(workspaceId, userId);
       
       // Setup real-time subscription using the subscription manager
-      const unsubscribe = subscribeToTasks((updatedTasks) => {
+      const unsubscribe = subscribeToWorkspaceTasks(workspaceId, userId, (updatedTasks) => {
         dispatch(setTasks(updatedTasks));
       });
       
@@ -50,9 +60,16 @@ export const fetchTasks = createAsyncThunk(
 
 export const createTaskThunk = createAsyncThunk(
   'tasks/createTask',
-  async (task: Omit<Task, 'id'>, { rejectWithValue }) => {
+  async (task: Omit<Task, 'id'>, { getState, rejectWithValue }) => {
     try {
-      return await createTaskInFirestore(task);
+      const state = getState() as RootState;
+      const userId = state.auth.user?.uid;
+      
+      if (!userId) {
+        throw new Error('User not logged in');
+      }
+
+      return await createTaskInFirestore(task, userId);
     } catch (error) {
       return rejectWithValue((error as Error).message);
     }
@@ -61,9 +78,16 @@ export const createTaskThunk = createAsyncThunk(
 
 export const updateTaskThunk = createAsyncThunk(
   'tasks/updateTask',
-  async (task: Task, { rejectWithValue }) => {
+  async (task: Task, { getState, rejectWithValue }) => {
     try {
-      await updateTaskInFirestore(task);
+      const state = getState() as RootState;
+      const userId = state.auth.user?.uid;
+      
+      if (!userId) {
+        throw new Error('User not logged in');
+      }
+
+      await updateTaskInFirestore(task, userId);
       return task;
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -73,9 +97,16 @@ export const updateTaskThunk = createAsyncThunk(
 
 export const updateTaskStatusThunk = createAsyncThunk(
   'tasks/updateTaskStatus',
-  async ({ taskId, status }: { taskId: string; status: TaskStatus }, { rejectWithValue }) => {
+  async ({ taskId, status }: { taskId: string; status: TaskStatus }, { getState, rejectWithValue }) => {
     try {
-      await updateTaskStatusInFirestore(taskId, status);
+      const state = getState() as RootState;
+      const userId = state.auth.user?.uid;
+      
+      if (!userId) {
+        throw new Error('User not logged in');
+      }
+
+      await updateTaskStatusInFirestore(taskId, status, userId);
       return { taskId, status };
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -85,9 +116,16 @@ export const updateTaskStatusThunk = createAsyncThunk(
 
 export const deleteTaskThunk = createAsyncThunk(
   'tasks/deleteTask',
-  async (taskId: string, { rejectWithValue }) => {
+  async (taskId: string, { getState, rejectWithValue }) => {
     try {
-      await deleteTaskFromFirestore(taskId);
+      const state = getState() as RootState;
+      const userId = state.auth.user?.uid;
+      
+      if (!userId) {
+        throw new Error('User not logged in');
+      }
+
+      await deleteTaskFromFirestore(taskId, userId);
       return taskId;
     } catch (error) {
       return rejectWithValue((error as Error).message);

@@ -1,15 +1,15 @@
-import { configureStore } from '@reduxjs/toolkit';
+import { configureStore, isPlainObject } from '@reduxjs/toolkit';
+import { useDispatch } from 'react-redux';
+
+// Import reducers
 import taskReducer from './slices/taskSlice';
 import chatReducer from './slices/chatSlice';
 import authReducer from './slices/authSlice';
 import calendarReducer from './slices/calendarSlice';
 import workspaceReducer from './slices/workspaceSlice';
 import documentReducer from './slices/documentSlice';
-import { useDispatch } from 'react-redux';
-import { isPlainObject } from '@reduxjs/toolkit';
-import { saveState, loadState } from '../utils/storagePersistence';
 
-// Custom serializable check function to handle Firestore timestamps
+// Helper function for Firestore timestamp serialization
 const isFirestoreTimestamp = (value: any): boolean => {
   return (
     value !== null &&
@@ -21,16 +21,7 @@ const isFirestoreTimestamp = (value: any): boolean => {
   );
 };
 
-// Only persist document state from localStorage
-const persistedDocumentState = loadState('documentState', {
-  documents: [],
-  currentDocument: null,
-  recentDocuments: [],
-  starredDocuments: [],
-  loading: false,
-  error: null
-});
-
+// Configure Redux store with Firestore-aware serialization
 export const store = configureStore({
   reducer: {
     tasks: taskReducer,
@@ -39,10 +30,6 @@ export const store = configureStore({
     calendar: calendarReducer,
     workspace: workspaceReducer,
     documents: documentReducer,
-  },
-  preloadedState: {
-    // Only preload document state from localStorage
-    documents: persistedDocumentState
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -88,22 +75,6 @@ export const store = configureStore({
         },
       },
     }),
-});
-
-// Subscribe to store changes to save document state to localStorage
-store.subscribe(() => {
-  const state = store.getState();
-  
-  // Only persist document state
-  if (!saveState('documentState', state.documents)) {
-    console.warn('Failed to persist document state to localStorage');
-  }
-  
-  // Verify document persistence
-  const savedDocumentState = loadState('documentState', null);
-  if (!savedDocumentState) {
-    console.warn('Document state persistence verification failed');
-  }
 });
 
 export type RootState = ReturnType<typeof store.getState>;

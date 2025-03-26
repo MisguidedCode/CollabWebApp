@@ -5,13 +5,13 @@ import {
   CalendarViewType 
 } from '../../types/calendar';
 import {
-  createEvent as createEventInFirestore,
-  getAllEvents,
+  createEvent as createCalendarEvent,
+  getWorkspaceEvents,
   getEventsInRange,
-  updateEvent as updateEventInFirestore,
-  deleteEvent as deleteEventFromFirestore,
+  updateEvent as updateCalendarEvent,
+  deleteEvent as deleteCalendarEvent,
   getUserEvents,
-  subscribeToUserEvents
+  subscribeToWorkspaceEvents
 } from '../../services/calendarService';
 import {
   registerSubscription,
@@ -29,9 +29,9 @@ const initialState: CalendarState = {
 // Async Thunks
 export const fetchEvents = createAsyncThunk(
   'calendar/fetchEvents',
-  async (_, { rejectWithValue }) => {
+  async ({ workspaceId, userId }: { workspaceId: string; userId: string }, { rejectWithValue }) => {
     try {
-      return await getAllEvents();
+      return await getWorkspaceEvents(workspaceId, userId);
     } catch (error) {
       return rejectWithValue((error as Error).message);
     }
@@ -40,9 +40,9 @@ export const fetchEvents = createAsyncThunk(
 
 export const fetchEventsInRange = createAsyncThunk(
   'calendar/fetchEventsInRange',
-  async ({ start, end }: { start: Date; end: Date }, { rejectWithValue }) => {
+  async ({ workspaceId, userId, start, end }: { workspaceId: string; userId: string; start: Date; end: Date }, { rejectWithValue }) => {
     try {
-      return await getEventsInRange(start, end);
+      return await getEventsInRange(workspaceId, start, end, userId);
     } catch (error) {
       return rejectWithValue((error as Error).message);
     }
@@ -51,17 +51,19 @@ export const fetchEventsInRange = createAsyncThunk(
 
 export const fetchUserEventsThunk = createAsyncThunk(
   'calendar/fetchUserEvents',
-  async (userId: string, { dispatch, rejectWithValue }) => {
+  async ({ workspaceId, userId }: { workspaceId: string; userId: string }, { dispatch, rejectWithValue }) => {
     try {
-      const events = await getUserEvents(userId);
+      const events = await getUserEvents(workspaceId, userId);
       
       // Setup real-time subscription
-      const unsubscribe = subscribeToUserEvents(userId, (updatedEvents) => {
+      const subscription = subscribeToWorkspaceEvents(workspaceId, userId, (updatedEvents) => {
         dispatch(setEvents(updatedEvents));
       });
       
       // Store the unsubscribe function
-      registerSubscription('calendarEvents', unsubscribe);
+      if (typeof subscription === 'function') {
+        registerSubscription('calendarEvents', subscription);
+      }
       
       return events;
     } catch (error) {
@@ -72,9 +74,9 @@ export const fetchUserEventsThunk = createAsyncThunk(
 
 export const createEventThunk = createAsyncThunk(
   'calendar/createEvent',
-  async (event: Omit<CalendarEvent, 'id'>, { rejectWithValue }) => {
+  async ({ event, userId }: { event: Omit<CalendarEvent, 'id'>, userId: string }, { rejectWithValue }) => {
     try {
-      return await createEventInFirestore(event);
+      return await createCalendarEvent(event, userId);
     } catch (error) {
       return rejectWithValue((error as Error).message);
     }
@@ -83,9 +85,9 @@ export const createEventThunk = createAsyncThunk(
 
 export const updateEventThunk = createAsyncThunk(
   'calendar/updateEvent',
-  async (event: CalendarEvent, { rejectWithValue }) => {
+  async ({ event, userId }: { event: CalendarEvent, userId: string }, { rejectWithValue }) => {
     try {
-      await updateEventInFirestore(event);
+      await updateCalendarEvent(event, userId);
       return event;
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -95,9 +97,9 @@ export const updateEventThunk = createAsyncThunk(
 
 export const deleteEventThunk = createAsyncThunk(
   'calendar/deleteEvent',
-  async (eventId: string, { rejectWithValue }) => {
+  async ({ eventId, userId }: { eventId: string, userId: string }, { rejectWithValue }) => {
     try {
-      await deleteEventFromFirestore(eventId);
+      await deleteCalendarEvent(eventId, userId);
       return eventId;
     } catch (error) {
       return rejectWithValue((error as Error).message);
@@ -267,8 +269,11 @@ export const {
 } = calendarSlice.actions;
 
 // For backwards compatibility with existing code
-export const addEvent = createEventThunk;
-export const updateEvent = updateEventThunk;
-export const deleteEvent = deleteEventThunk;
+export const addEvent = (event: Omit<CalendarEvent, 'id'>, userId: string) => 
+  createEventThunk({ event, userId });
+export const updateEvent = (event: CalendarEvent, userId: string) => 
+  updateEventThunk({ event, userId });
+export const deleteEvent = (eventId: string, userId: string) => 
+  deleteEventThunk({ eventId, userId });
 
 export default calendarSlice.reducer;

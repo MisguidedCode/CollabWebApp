@@ -13,6 +13,7 @@ export interface Message {
 
 export interface Chat {
   id: string;
+  workspaceId: string; // Workspace this chat belongs to
   type: ChatType;
   name: string; // Channel name or user name for direct messages
   description?: string;

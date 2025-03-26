@@ -1,11 +1,12 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
+import { RootState } from '../index';
 import { Chat, Message, ChatState } from '../../types/chat';
 import {
-  getUserChats,
+  getWorkspaceChats,
   getChatMessages,
   sendMessage as sendMessageToFirestore,
   createDirectMessageChat,
-  subscribeToUserChats,
+  subscribeToWorkspaceChats,
   subscribeToChatMessages
 } from '../../services/chatService';
 import { createChannelChatEnhanced } from '../../services/createChannel';
@@ -26,14 +27,22 @@ const initialState: ChatState = {
 // Async Thunks
 export const fetchUserChats = createAsyncThunk(
   'chat/fetchUserChats',
-  async (userId: string, { dispatch, rejectWithValue }) => {
+  async (_, { dispatch, getState, rejectWithValue }) => {
     try {
-      console.log('Fetching chats for user:', userId);
-      const chats = await getUserChats(userId);
+      const state = getState() as RootState;
+      const userId = state.auth.user?.uid;
+      const workspaceId = state.workspace.currentWorkspaceId;
+
+      if (!userId || !workspaceId) {
+        throw new Error('User or workspace not selected');
+      }
+
+      console.log('Fetching chats for user:', userId, 'in workspace:', workspaceId);
+      const chats = await getWorkspaceChats(workspaceId, userId);
       console.log('Fetched chats:', chats);
       
       // Setup real-time subscription using the subscription manager
-      const unsubscribe = subscribeToUserChats(userId, (updatedChats) => {
+      const unsubscribe = subscribeToWorkspaceChats(workspaceId, userId, (updatedChats) => {
         console.log('Real-time chat update received:', updatedChats);
         dispatch(setChats(updatedChats));
       });
@@ -51,20 +60,27 @@ export const fetchUserChats = createAsyncThunk(
 
 export const fetchChatMessages = createAsyncThunk(
   'chat/fetchChatMessages',
-  async (chatId: string, { dispatch, rejectWithValue }) => {
+  async (chatId: string, { dispatch, getState, rejectWithValue }) => {
     try {
+      const state = getState() as RootState;
+      const userId = state.auth.user?.uid;
+
+      if (!userId) {
+        throw new Error('User not logged in');
+      }
+
       // Clean up any existing message subscription first
       unregisterSubscription(`messages-${chatId}`);
       
-      const messages = await getChatMessages(chatId);
+      const messages = await getChatMessages(chatId, userId);
       
       // Setup real-time subscription for this chat's messages
-      const unsubscribe = subscribeToChatMessages(chatId, (updatedMessages) => {
+      const unsubscribePromise = await subscribeToChatMessages(chatId, userId, (updatedMessages: Message[]) => {
         dispatch(setMessages({ chatId, messages: updatedMessages }));
       });
       
       // Store the unsubscribe function in our manager, not in Redux state
-      registerSubscription(`messages-${chatId}`, unsubscribe);
+      registerSubscription(`messages-${chatId}`, unsubscribePromise);
       
       return { chatId, messages };
     } catch (error) {
@@ -76,16 +92,23 @@ export const fetchChatMessages = createAsyncThunk(
 
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
-  async ({ chatId, content, senderId }: { chatId: string; content: string; senderId: string }, { rejectWithValue }) => {
+  async ({ chatId, content }: { chatId: string; content: string }, { getState, rejectWithValue }) => {
     try {
+      const state = getState() as RootState;
+      const userId = state.auth.user?.uid;
+
+      if (!userId) {
+        throw new Error('User not logged in');
+      }
+
       const newMessage: Omit<Message, 'id'> = {
         content,
         type: 'text',
-        senderId,
+        senderId: userId,
         timestamp: new Date().toISOString(),
       };
       
-      const sentMessage = await sendMessageToFirestore(chatId, newMessage);
+      const sentMessage = await sendMessageToFirestore(chatId, newMessage, userId);
       return { chatId, message: sentMessage };
     } catch (error) {
       console.error('Error sending message:', error);
@@ -96,11 +119,18 @@ export const sendMessage = createAsyncThunk(
 
 export const createChannel = createAsyncThunk(
   'chat/createChannel',
-  async ({ name, description, creatorId }: { name: string; description: string; creatorId: string }, { rejectWithValue }) => {
+  async ({ name, description }: { name: string; description: string }, { getState, rejectWithValue }) => {
     try {
-      console.log('Creating channel with enhanced function:', { name, description, creatorId });
-      // Use our enhanced channel creation function instead
-      return await createChannelChatEnhanced(name, description, creatorId);
+      const state = getState() as RootState;
+      const userId = state.auth.user?.uid;
+      const workspaceId = state.workspace.currentWorkspaceId;
+
+      if (!userId || !workspaceId) {
+        throw new Error('User or workspace not selected');
+      }
+
+      console.log('Creating channel:', { name, description, creatorId: userId });
+      return await createChannelChatEnhanced(name, description, userId);
     } catch (error) {
       console.error('Error creating channel:', error);
       return rejectWithValue((error as Error).message);
@@ -111,18 +141,24 @@ export const createChannel = createAsyncThunk(
 export const createDirectMessage = createAsyncThunk(
   'chat/createDirectMessage',
   async ({ 
-    userId1, 
     userId2, 
     userName1, 
     userName2 
   }: { 
-    userId1: string; 
     userId2: string; 
     userName1: string; 
     userName2: string 
-  }, { rejectWithValue }) => {
+  }, { getState, rejectWithValue }) => {
     try {
-      return await createDirectMessageChat(userId1, userId2, userName1, userName2);
+      const state = getState() as RootState;
+      const userId1 = state.auth.user?.uid;
+      const workspaceId = state.workspace.currentWorkspaceId;
+
+      if (!userId1 || !workspaceId) {
+        throw new Error('User or workspace not selected');
+      }
+
+      return await createDirectMessageChat(workspaceId, userId1, userId2, userName1, userName2);
     } catch (error) {
       console.error('Error creating direct message:', error);
       return rejectWithValue((error as Error).message);

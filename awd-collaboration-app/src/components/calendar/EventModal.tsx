@@ -15,6 +15,7 @@ interface EventModalProps {
 const EventModal = ({ isOpen, onClose, event, selectedDate }: EventModalProps) => {
   const dispatch = useAppDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
+  const currentWorkspaceId = useSelector((state: RootState) => state.workspace.currentWorkspaceId);
   
   // Default start/end times (1 hour event starting at the current time or selected date)
   const getDefaultStartDate = (): Date => {
@@ -29,7 +30,15 @@ const EventModal = ({ isOpen, onClose, event, selectedDate }: EventModalProps) =
     return date;
   };
   
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    title: string;
+    description: string;
+    location: string;
+    allDay: boolean;
+    start: string;
+    end: string;
+    color: string;
+  }>({
     title: '',
     description: '',
     location: '',
@@ -103,8 +112,8 @@ const EventModal = ({ isOpen, onClose, event, selectedDate }: EventModalProps) =
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!user) {
-      setError('You must be logged in to create or edit events');
+    if (!user || !currentWorkspaceId) {
+      setError('You must be logged in and have a workspace selected to create or edit events');
       return;
     }
     
@@ -135,23 +144,24 @@ const EventModal = ({ isOpen, onClose, event, selectedDate }: EventModalProps) =
         end: endDate.toISOString(),
         allDay: formData.allDay,
         color: formData.color,
+        workspaceId: currentWorkspaceId,
         createdBy: event?.createdBy || user.uid,
         createdAt: event?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        participants: event?.participants || [],
+        participants: event?.participants || (user ? [user.uid] : []),
       };
       
       if (event) {
         // Update the event locally in Redux first (optimistic update)
         dispatch(updateEventLocally(eventData));
         // Then update in Firestore
-        await dispatch(updateEventThunk(eventData)).unwrap();
+        await dispatch(updateEventThunk({ event: eventData, userId: user!.uid })).unwrap();
       } else {
         // Add the new event locally in Redux first (optimistic update)
         dispatch(addEventLocally(eventData));
         // Then create in Firestore (which might update the ID if we're using Firestore's auto-ID)
         const { id, ...newEventData } = eventData;
-        await dispatch(createEventThunk(newEventData)).unwrap();
+        await dispatch(createEventThunk({ event: newEventData, userId: user!.uid })).unwrap();
       }
       
       onClose();
@@ -173,7 +183,7 @@ const EventModal = ({ isOpen, onClose, event, selectedDate }: EventModalProps) =
       // Remove the event locally in Redux first (optimistic update)
       dispatch(removeEventLocally(event.id));
       // Then delete from Firestore
-      await dispatch(deleteEventThunk(event.id)).unwrap();
+      await dispatch(deleteEventThunk({ eventId: event.id, userId: user!.uid })).unwrap();
       onClose();
     } catch (err) {
       setError((err as Error).message);

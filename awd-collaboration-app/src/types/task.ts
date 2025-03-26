@@ -14,6 +14,8 @@ export interface Task {
   dueDate?: string;
   tags: string[];
   attachments: TaskAttachment[];
+  workspaceId: string; // Added workspaceId to Task interface
+  updatedAt?: string;  // Added updatedAt to match service usage
 }
 
 export interface TaskColumn {

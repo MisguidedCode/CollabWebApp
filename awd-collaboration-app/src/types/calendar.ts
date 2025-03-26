@@ -2,6 +2,7 @@ export type CalendarViewType = 'month' | 'week' | 'day' | 'agenda';
 
 export interface CalendarEvent {
   id: string;
+  workspaceId: string; // Workspace this event belongs to
   title: string;
   description?: string;
   start: string; // ISO string

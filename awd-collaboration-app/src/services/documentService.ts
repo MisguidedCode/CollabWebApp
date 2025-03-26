@@ -20,6 +20,46 @@ import {
   import { convertTimestampToString } from '../utils/firestoreHelpers';
   import { registerSubscription } from '../utils/subscriptionManager';
   
+  // Helper function to check workspace membership
+  const checkWorkspaceMembership = async (userId: string, workspaceId: string): Promise<boolean> => {
+    const workspaceDoc = doc(db, `workspaces/${workspaceId}`);
+    const snapshot = await getDoc(workspaceDoc);
+    
+    if (!snapshot.exists()) {
+      return false;
+    }
+    
+    const workspace = snapshot.data();
+    return workspace.members.some((member: any) => 
+      member.userId === userId && member.status === 'active'
+    );
+  };
+  
+  // Helper function to verify document access
+  const verifyDocumentAccess = async (documentId: string, userId: string): Promise<Document> => {
+    const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, documentId);
+    const snapshot = await getDoc(documentDoc);
+    
+    if (!snapshot.exists()) {
+      throw new Error('Document not found');
+    }
+    
+    const document = documentConverter.fromFirestore(snapshot);
+    
+    // Check workspace membership
+    if (!await checkWorkspaceMembership(userId, document.permissions.workspaceId)) {
+      throw new Error('User does not have access to this document');
+    }
+    
+    // Check document-specific permissions
+    const { owner, readers, editors, commenters } = document.permissions;
+    if (![owner, ...readers, ...editors, ...commenters].includes(userId)) {
+      throw new Error('User does not have permission to access this document');
+    }
+    
+    return document;
+  };
+  
   // Firebase collection names
   const COLLECTIONS = {
     DOCUMENTS: 'documents',
@@ -70,8 +110,16 @@ import {
     }
   };
   
-  // Create a new document
-  export const createDocument = async (document: Omit<Document, 'id' | 'createdAt' | 'updatedAt'>): Promise<Document> => {
+  // Create a new document with workspace check
+  export const createDocument = async (
+    document: Omit<Document, 'id' | 'createdAt' | 'updatedAt'>, 
+    userId: string
+  ): Promise<Document> => {
+    // Verify workspace membership
+    if (!await checkWorkspaceMembership(userId, document.permissions.workspaceId)) {
+      throw new Error('User is not a member of this workspace');
+    }
+
     const documentsCollection = collection(db, COLLECTIONS.DOCUMENTS);
     const docRef = doc(documentsCollection);
     const newDocument: Document = {
@@ -88,23 +136,22 @@ import {
     return documentConverter.fromFirestore(snapshot);
   };
   
-  // Get a document by ID
-  export const getDocumentById = async (documentId: string): Promise<Document | null> => {
-    const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, documentId);
-    const snapshot = await getDoc(documentDoc);
-    
-    if (!snapshot.exists()) {
-      return null;
-    }
-    
-    return documentConverter.fromFirestore(snapshot);
+  // Get a document by ID with access check
+  export const getDocumentById = async (documentId: string, userId: string): Promise<Document | null> => {
+    return verifyDocumentAccess(documentId, userId);
   };
   
-  // Get all documents for a user
-  export const getUserDocuments = async (userId: string): Promise<Document[]> => {
+  // Get all documents for a user in a workspace
+  export const getWorkspaceDocuments = async (workspaceId: string, userId: string): Promise<Document[]> => {
+    // Verify workspace membership
+    if (!await checkWorkspaceMembership(userId, workspaceId)) {
+      throw new Error('User is not a member of this workspace');
+    }
+
     const documentsCollection = collection(db, COLLECTIONS.DOCUMENTS);
     const q = query(
       documentsCollection,
+      where('permissions.workspaceId', '==', workspaceId),
       where('permissions.owner', '==', userId),
       orderBy('updatedAt', 'desc')
     );
@@ -113,11 +160,17 @@ import {
     return snapshot.docs.map(doc => documentConverter.fromFirestore(doc));
   };
   
-  // Get documents shared with a user
-  export const getSharedDocuments = async (userId: string): Promise<Document[]> => {
+  // Get documents shared with a user in a workspace
+  export const getSharedWorkspaceDocuments = async (workspaceId: string, userId: string): Promise<Document[]> => {
+    // Verify workspace membership
+    if (!await checkWorkspaceMembership(userId, workspaceId)) {
+      throw new Error('User is not a member of this workspace');
+    }
+
     const documentsCollection = collection(db, COLLECTIONS.DOCUMENTS);
     const q = query(
       documentsCollection,
+      where('permissions.workspaceId', '==', workspaceId),
       where('permissions.readers', 'array-contains', userId),
       orderBy('updatedAt', 'desc')
     );
@@ -126,8 +179,13 @@ import {
     return snapshot.docs.map(doc => documentConverter.fromFirestore(doc));
   };
   
-  // Get recent documents for a user
-  export const getRecentDocuments = async (userId: string, maxCount = 10): Promise<Document[]> => {
+  // Get recent documents for a user in a workspace
+  export const getRecentWorkspaceDocuments = async (workspaceId: string, userId: string, maxCount = 10): Promise<Document[]> => {
+    // Verify workspace membership
+    if (!await checkWorkspaceMembership(userId, workspaceId)) {
+      throw new Error('User is not a member of this workspace');
+    }
+
     const documentsCollection = collection(db, COLLECTIONS.DOCUMENTS);
     
     // Query for documents owned by user or shared with user
@@ -159,24 +217,42 @@ import {
       .slice(0, maxCount);
   };
   
-  // Update document metadata
-  export const updateDocument = async (document: Document): Promise<void> => {
+  // Update document metadata with workspace check
+  export const updateDocument = async (document: Document, userId: string): Promise<void> => {
+    // Verify access to document
+    await verifyDocumentAccess(document.id, userId);
+    
     const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, document.id);
     await updateDoc(documentDoc, documentConverter.toFirestore(document));
   };
   
-  // Delete a document
-  export const deleteDocument = async (documentId: string): Promise<void> => {
+  // Delete a document with workspace check
+  export const deleteDocument = async (documentId: string, userId: string): Promise<void> => {
+    // Verify access and get document to check if user is owner
+    const document = await verifyDocumentAccess(documentId, userId);
+    
+    // Only owner can delete document
+    if (document.permissions.owner !== userId) {
+      throw new Error('Only document owner can delete the document');
+    }
+    
     const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, documentId);
     await deleteDoc(documentDoc);
   };
   
-  // Upload document content
+  // Upload document content with workspace check
   export const uploadDocumentContent = async (
     documentId: string, 
     content: string | Blob | File, 
+    userId: string,
     onProgress?: (progress: number) => void
   ): Promise<string> => {
+    // Verify document access and check if user has edit permissions
+    const document = await verifyDocumentAccess(documentId, userId);
+    if (![document.permissions.owner, ...document.permissions.editors].includes(userId)) {
+      throw new Error('User does not have permission to edit this document');
+    }
+    
     let fileRef;
     let downloadUrl = '';
     
@@ -191,16 +267,12 @@ import {
       const extension = content instanceof File ? content.name.split('.').pop() || '' : 'bin';
       fileRef = ref(storage, `${COLLECTIONS.DOCUMENT_CONTENT}/${documentId}/content.${extension}`);
       
-      // Upload with progress tracking
+      // Upload file
+      await uploadBytes(fileRef, file);
+      
+      // Notify completion if progress callback is provided
       if (onProgress) {
-        const uploadTask = uploadBytes(fileRef, file);
-        uploadTask.then(snapshot => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          onProgress(progress);
-        });
-        await uploadTask;
-      } else {
-        await uploadBytes(fileRef, file);
+        onProgress(100);
       }
     }
     
@@ -217,11 +289,18 @@ import {
     return downloadUrl;
   };
   
-  // Create a new document version
+  // Create a new document version with workspace check
   export const createDocumentVersion = async (
     documentId: string,
-    version: Omit<DocumentVersion, 'id' | 'createdAt'>
+    version: Omit<DocumentVersion, 'id' | 'createdAt'>,
+    userId: string
   ): Promise<DocumentVersion> => {
+    // Verify document access and check if user has edit permissions
+    const document = await verifyDocumentAccess(documentId, userId);
+    if (![document.permissions.owner, ...document.permissions.editors].includes(userId)) {
+      throw new Error('User does not have permission to create document versions');
+    }
+
     const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, documentId);
     const versionsCollection = collection(documentDoc, COLLECTIONS.DOCUMENT_VERSIONS);
     const versionRef = doc(versionsCollection);
@@ -240,15 +319,18 @@ import {
     // Update current document with new version ID
     await updateDoc(documentDoc, {
       currentVersionId: newVersion.id,
-      versions: [...(await getDocumentVersions(documentId)), newVersion],
+      versions: [...(await getDocumentVersions(documentId, userId)), newVersion],
       updatedAt: serverTimestamp()
     });
     
     return newVersion;
   };
   
-  // Get all versions of a document
-  export const getDocumentVersions = async (documentId: string): Promise<DocumentVersion[]> => {
+  // Get all versions of a document with workspace check
+  export const getDocumentVersions = async (documentId: string, userId: string): Promise<DocumentVersion[]> => {
+    // Verify document access
+    await verifyDocumentAccess(documentId, userId);
+
     const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, documentId);
     const versionsCollection = collection(documentDoc, COLLECTIONS.DOCUMENT_VERSIONS);
     const q = query(versionsCollection, orderBy('createdAt', 'desc'));
@@ -264,11 +346,18 @@ import {
     });
   };
   
-  // Add a comment to a document
+  // Add a comment to a document with workspace check
   export const addDocumentComment = async (
     documentId: string,
-    comment: Omit<DocumentComment, 'id' | 'createdAt'>
+    comment: Omit<DocumentComment, 'id' | 'createdAt'>,
+    userId: string
   ): Promise<DocumentComment> => {
+    // Verify document access and check if user has commenting permissions
+    const document = await verifyDocumentAccess(documentId, userId);
+    if (![document.permissions.owner, ...document.permissions.commenters, ...document.permissions.editors].includes(userId)) {
+      throw new Error('User does not have permission to comment on this document');
+    }
+
     const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, documentId);
     const commentsCollection = collection(documentDoc, COLLECTIONS.DOCUMENT_COMMENTS);
     const commentRef = doc(commentsCollection);
@@ -287,8 +376,11 @@ import {
     return newComment;
   };
   
-  // Get all comments for a document
-  export const getDocumentComments = async (documentId: string): Promise<DocumentComment[]> => {
+  // Get all comments for a document with workspace check
+  export const getDocumentComments = async (documentId: string, userId: string): Promise<DocumentComment[]> => {
+    // Verify document access
+    await verifyDocumentAccess(documentId, userId);
+
     const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, documentId);
     const commentsCollection = collection(documentDoc, COLLECTIONS.DOCUMENT_COMMENTS);
     const q = query(commentsCollection, orderBy('createdAt', 'asc'));
@@ -305,12 +397,19 @@ import {
     });
   };
   
-  // Resolve a comment
+  // Resolve a comment with workspace check
   export const resolveComment = async (
     documentId: string,
     commentId: string,
-    resolvedBy: string
+    resolvedBy: string,
+    userId: string
   ): Promise<void> => {
+    // Verify document access and check if user has permission to resolve comments
+    const document = await verifyDocumentAccess(documentId, userId);
+    if (![document.permissions.owner, ...document.permissions.editors].includes(userId)) {
+      throw new Error('User does not have permission to resolve comments');
+    }
+
     const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, documentId);
     const commentDoc = doc(collection(documentDoc, COLLECTIONS.DOCUMENT_COMMENTS), commentId);
     
@@ -321,56 +420,108 @@ import {
     });
   };
   
-  // Subscribe to a document's changes
-  export const subscribeToDocument = (
+  // Subscribe to a document's changes with workspace check
+  export const subscribeToDocument = async (
     documentId: string,
-    callback: (document: Document) => void
-  ): () => void => {
-    const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, documentId);
-    
-    const unsubscribe = onSnapshot(documentDoc, (snapshot) => {
-      if (snapshot.exists()) {
-        callback(documentConverter.fromFirestore(snapshot));
-      }
-    });
-    
-    // Register subscription for cleanup
-    registerSubscription(`document-${documentId}`, unsubscribe);
-    
-    return unsubscribe;
-  };
-  
-  // Subscribe to document comments
-  export const subscribeToDocumentComments = (
-    documentId: string,
-    callback: (comments: DocumentComment[]) => void
-  ): () => void => {
-    const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, documentId);
-    const commentsCollection = collection(documentDoc, COLLECTIONS.DOCUMENT_COMMENTS);
-    const q = query(commentsCollection, orderBy('createdAt', 'asc'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const comments = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          ...data,
-          id: doc.id,
-          createdAt: convertTimestampToString(data.createdAt) || new Date().toISOString(),
-          resolvedAt: data.resolvedAt ? convertTimestampToString(data.resolvedAt) : undefined,
-        } as DocumentComment;
+    userId: string,
+    callback: (document: Document | null) => void
+  ): Promise<() => void> => {
+    try {
+      // Verify initial access
+      await verifyDocumentAccess(documentId, userId);
+      
+      const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, documentId);
+      const unsubscribe = onSnapshot(documentDoc, async (snapshot) => {
+        if (snapshot.exists()) {
+          const document = documentConverter.fromFirestore(snapshot);
+          try {
+            // Re-verify access on each update
+            await verifyDocumentAccess(documentId, userId);
+            callback(document);
+          } catch (error) {
+            console.error('Lost access to document:', error);
+            callback(null);
+          }
+        } else {
+          callback(null);
+        }
       });
       
-      callback(comments);
-    });
-    
-    // Register subscription for cleanup
-    registerSubscription(`document-comments-${documentId}`, unsubscribe);
-    
-    return unsubscribe;
+      // Register subscription for cleanup
+      registerSubscription(`document-${documentId}`, unsubscribe);
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error subscribing to document:', error);
+      callback(null);
+      return () => {};
+    }
+  };
+  
+  // Subscribe to document comments with workspace check
+  export const subscribeToDocumentComments = async (
+    documentId: string,
+    userId: string,
+    callback: (comments: DocumentComment[]) => void
+  ): Promise<() => void> => {
+    try {
+      // Verify initial access
+      await verifyDocumentAccess(documentId, userId);
+      
+      const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, documentId);
+      const commentsCollection = collection(documentDoc, COLLECTIONS.DOCUMENT_COMMENTS);
+      const q = query(commentsCollection, orderBy('createdAt', 'asc'));
+      
+      const unsubscribe = onSnapshot(q, async (snapshot) => {
+        try {
+          // Re-verify access on each update
+          await verifyDocumentAccess(documentId, userId);
+          
+          const comments = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              ...data,
+              id: doc.id,
+              createdAt: convertTimestampToString(data.createdAt) || new Date().toISOString(),
+              resolvedAt: data.resolvedAt ? convertTimestampToString(data.resolvedAt) : undefined,
+            } as DocumentComment;
+          });
+          
+          callback(comments);
+        } catch (error) {
+          console.error('Lost access to document comments:', error);
+          callback([]);
+        }
+      });
+      
+      // Register subscription for cleanup
+      registerSubscription(`document-comments-${documentId}`, unsubscribe);
+      return unsubscribe;
+      
+    } catch (error) {
+      console.error('Error subscribing to document comments:', error);
+      callback([]);
+      return () => {};
+    }
   };
   
   // Share a document with a user
-  export const shareDocumentWithUser = async (
+// Alias for backward compatibility
+export const getRecentDocuments = async (userId: string, maxCount: number = 10): Promise<Document[]> => {
+  const userDoc = await getDoc(doc(db, 'users', userId));
+  if (!userDoc.exists()) {
+    throw new Error('User not found');
+  }
+  
+  // Get user's current workspace or default to first one
+  const workspaceId = userDoc.data().currentWorkspaceId || userDoc.data().workspaces?.[0];
+  if (!workspaceId) {
+    return [];
+  }
+  
+  return getRecentWorkspaceDocuments(workspaceId, userId, maxCount);
+};
+
+export const shareDocumentWithUser = async (
     documentId: string,
     userId: string,
     permission: 'readers' | 'editors' | 'commenters'

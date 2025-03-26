@@ -24,70 +24,178 @@ const Calendar = () => {
   const dispatch = useAppDispatch();
   const { currentView, currentDate, events, loading, error } = useSelector((state: RootState) => state.calendar);
   const user = useSelector((state: RootState) => state.auth.user);
+  const currentWorkspaceId = useSelector((state: RootState) => state.workspace.currentWorkspaceId);
+  const workspaces = useSelector((state: RootState) => state.workspace.workspaces);
+  const currentWorkspace = workspaces.find(w => w.id === currentWorkspaceId);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   
-  // Load initial events
+  // Load initial events and set up date range
   useEffect(() => {
-    if (user) {
-      dispatch(fetchUserEventsThunk(user.uid));
+    if (user && currentWorkspaceId) {
+      const start = new Date(currentDate);
+      const end = new Date(currentDate);
+
+      switch (currentView) {
+        case 'month':
+          start.setDate(1); // First day of current month
+          end.setMonth(end.getMonth() + 1, 0); // Last day of current month
+          break;
+        case 'week':
+          start.setDate(start.getDate() - start.getDay()); // Start of week
+          end.setDate(end.getDate() - end.getDay() + 6); // End of week
+          break;
+        case 'day':
+          start.setHours(0, 0, 0, 0);
+          end.setHours(23, 59, 59, 999);
+          break;
+        case 'agenda':
+          start.setDate(1); // First day of current month
+          end.setMonth(end.getMonth() + 1, 0); // Last day of current month
+          break;
+      }
+
+      dispatch(fetchEventsInRange({ 
+        workspaceId: currentWorkspaceId, 
+        userId: user.uid,
+        start,
+        end
+      }));
     }
-  }, [dispatch, user]);
+  }, [dispatch, user, currentWorkspaceId, currentView, currentDate]);
   
   // Convert currentDate string to a Date object
   const currentDateObj = new Date(currentDate);
   
   // Handle navigation
+  const fetchEventsForRange = (start: Date, end: Date) => {
+    if (user && currentWorkspaceId) {
+      dispatch(fetchEventsInRange({ workspaceId: currentWorkspaceId, userId: user.uid, start, end }));
+    }
+  };
+
   const handlePrevious = () => {
     const date = new Date(currentDate);
+    const start = new Date(date);
+    const end = new Date(date);
     
     switch (currentView) {
       case 'month':
         date.setMonth(date.getMonth() - 1);
+        start.setMonth(start.getMonth() - 1, 1); // First day of previous month
+        end.setMonth(end.getMonth(), 0); // Last day of previous month
         break;
       case 'week':
         date.setDate(date.getDate() - 7);
+        start.setDate(start.getDate() - 7);
+        end.setDate(end.getDate() - 1);
         break;
       case 'day':
         date.setDate(date.getDate() - 1);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
         break;
       case 'agenda':
         date.setMonth(date.getMonth() - 1);
+        start.setMonth(start.getMonth() - 1);
+        end.setMonth(end.getMonth());
         break;
     }
     
     dispatch(setCurrentDate(date.toISOString()));
+    fetchEventsForRange(start, end);
   };
   
   const handleNext = () => {
     const date = new Date(currentDate);
+    const start = new Date(date);
+    const end = new Date(date);
     
     switch (currentView) {
       case 'month':
         date.setMonth(date.getMonth() + 1);
+        start.setMonth(start.getMonth() + 1, 1); // First day of next month
+        end.setMonth(end.getMonth() + 2, 0); // Last day of next month
         break;
       case 'week':
         date.setDate(date.getDate() + 7);
+        start.setDate(start.getDate() + 7);
+        end.setDate(end.getDate() + 13);
         break;
       case 'day':
         date.setDate(date.getDate() + 1);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
         break;
       case 'agenda':
         date.setMonth(date.getMonth() + 1);
+        start.setMonth(start.getMonth() + 1);
+        end.setMonth(end.getMonth() + 2);
         break;
     }
     
     dispatch(setCurrentDate(date.toISOString()));
+    fetchEventsForRange(start, end);
   };
   
   const handleToday = () => {
-    dispatch(setCurrentDate(new Date().toISOString()));
+    const today = new Date();
+    const start = new Date(today);
+    const end = new Date(today);
+    
+    switch (currentView) {
+      case 'month':
+        start.setDate(1); // First day of current month
+        end.setMonth(end.getMonth() + 1, 0); // Last day of current month
+        break;
+      case 'week':
+        // Adjust to the start of the week
+        start.setDate(start.getDate() - start.getDay());
+        end.setDate(end.getDate() - end.getDay() + 6);
+        break;
+      case 'day':
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'agenda':
+        start.setDate(1); // First day of current month
+        end.setMonth(end.getMonth() + 1, 0); // Last day of current month
+        break;
+    }
+    
+    dispatch(setCurrentDate(today.toISOString()));
+    fetchEventsForRange(start, end);
   };
   
   const handleViewChange = (view: CalendarViewType) => {
+    const date = new Date(currentDate);
+    const start = new Date(date);
+    const end = new Date(date);
+    
+    switch (view) {
+      case 'month':
+        start.setDate(1); // First day of current month
+        end.setMonth(end.getMonth() + 1, 0); // Last day of current month
+        break;
+      case 'week':
+        // Adjust to the start of the week
+        start.setDate(start.getDate() - start.getDay());
+        end.setDate(end.getDate() - end.getDay() + 6);
+        break;
+      case 'day':
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'agenda':
+        start.setDate(1); // First day of current month
+        end.setMonth(end.getMonth() + 1, 0); // Last day of current month
+        break;
+    }
+    
     dispatch(setCurrentView(view));
+    fetchEventsForRange(start, end);
   };
   
   const handleEventClick = (event: CalendarEvent) => {
@@ -110,6 +218,9 @@ const Calendar = () => {
   
   // Calculate date range based on current view for displaying title
   const viewTitle = getViewTitle(currentDateObj, currentView);
+  
+  // Disable the Add Event button if no workspace is selected
+  const canAddEvent = Boolean(currentWorkspaceId);
   
   // Render selected calendar view
   const renderView = () => {
@@ -154,6 +265,14 @@ const Calendar = () => {
     }
   };
   
+  if (!currentWorkspaceId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <p className="text-gray-600 mb-2">Please select a workspace to view calendar events</p>
+      </div>
+    );
+  }
+
   if (loading && events.length === 0) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -209,7 +328,12 @@ const Calendar = () => {
               setSelectedDate(new Date(currentDate));
               setIsModalOpen(true);
             }}
-            className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            disabled={!canAddEvent}
+            className={`inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
+              canAddEvent 
+                ? 'bg-primary-600 hover:bg-primary-700' 
+                : 'bg-gray-400 cursor-not-allowed'
+            }`}
           >
             <PlusIcon className="h-4 w-4 mr-1" />
             Add Event

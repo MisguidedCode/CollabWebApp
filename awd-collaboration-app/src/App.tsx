@@ -57,10 +57,12 @@ const AppContent = () => {
       dispatch(fetchTasks());
       
       // Initialize chats subscription
-      dispatch(fetchUserChats(user.uid));
+      dispatch(fetchUserChats());
       
-      // Initialize calendar events subscription
-      dispatch(fetchUserEventsThunk(user.uid));
+      // Initialize calendar events subscription for each workspace
+      workspaces.forEach(workspace => {
+        dispatch(fetchUserEventsThunk({ workspaceId: workspace.id, userId: user.uid }));
+      });
       
       // Initialize documents subscription
       dispatch(fetchUserDocumentsThunk(user.uid));

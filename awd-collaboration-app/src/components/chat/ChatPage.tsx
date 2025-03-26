@@ -17,7 +17,7 @@ const ChatPage = () => {
   useEffect(() => {
     if (user && activeChats.length === 0) {
       console.log('Explicitly fetching chats for user:', user.uid);
-      dispatch(fetchUserChats(user.uid));
+      dispatch(fetchUserChats());
     }
   }, [dispatch, user, activeChats.length]);
 
@@ -49,7 +49,7 @@ const ChatPage = () => {
           <p>{error}</p>
           <button 
             className="mt-4 px-4 py-2 bg-red-600 text-white rounded"
-            onClick={() => dispatch(fetchUserChats(user?.uid || ''))}
+            onClick={() => dispatch(fetchUserChats())}
           >
             Retry
           </button>

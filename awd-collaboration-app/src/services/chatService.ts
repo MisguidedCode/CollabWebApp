@@ -17,6 +17,21 @@ import {
 import { db, COLLECTIONS } from '../config/firebase';
 import { Chat, Message, ChatType } from '../types/chat';
 
+// Helper function to check workspace membership
+const checkWorkspaceMembership = async (userId: string, workspaceId: string): Promise<boolean> => {
+  const workspaceDoc = doc(db, COLLECTIONS.WORKSPACES, workspaceId);
+  const snapshot = await getDoc(workspaceDoc);
+  
+  if (!snapshot.exists()) {
+    return false;
+  }
+  
+  const workspace = snapshot.data();
+  return workspace.members.some((member: any) => 
+    member.userId === userId && member.status === 'active'
+  );
+};
+
 // Helper function to safely convert Firestore timestamps to ISO strings
 const convertTimestampToString = (timestamp: any): string | undefined => {
   if (!timestamp) return undefined;
@@ -100,8 +115,13 @@ const messageConverter = {
   }
 };
 
-// Create a new chat
-export const createChat = async (chat: Omit<Chat, 'id'>): Promise<Chat> => {
+// Create a new chat with workspace check
+export const createChat = async (chat: Omit<Chat, 'id'>, userId: string): Promise<Chat> => {
+  // Verify workspace membership
+  if (!await checkWorkspaceMembership(userId, chat.workspaceId)) {
+    throw new Error('User is not a member of this workspace');
+  }
+
   const chatsCollection = collection(db, COLLECTIONS.CHATS);
   const chatData = {
     ...chat,
@@ -116,8 +136,8 @@ export const createChat = async (chat: Omit<Chat, 'id'>): Promise<Chat> => {
   return chatConverter.fromFirestore(chatDoc);
 };
 
-// Get chat by ID
-export const getChatById = async (chatId: string): Promise<Chat | null> => {
+// Get chat by ID with workspace check
+export const getChatById = async (chatId: string, userId: string): Promise<Chat | null> => {
   const chatDoc = doc(db, COLLECTIONS.CHATS, chatId);
   const snapshot = await getDoc(chatDoc);
   
@@ -125,14 +145,27 @@ export const getChatById = async (chatId: string): Promise<Chat | null> => {
     return null;
   }
   
-  return chatConverter.fromFirestore(snapshot);
+  const chat = chatConverter.fromFirestore(snapshot);
+  
+  // Verify workspace membership
+  if (!await checkWorkspaceMembership(userId, chat.workspaceId)) {
+    throw new Error('User does not have access to this chat');
+  }
+  
+  return chat;
 };
 
-// Get all chats for a user
-export const getUserChats = async (userId: string): Promise<Chat[]> => {
+// Get all chats for a user in a workspace
+export const getWorkspaceChats = async (workspaceId: string, userId: string): Promise<Chat[]> => {
+  // Verify workspace membership
+  if (!await checkWorkspaceMembership(userId, workspaceId)) {
+    throw new Error('User is not a member of this workspace');
+  }
+
   const chatsCollection = collection(db, COLLECTIONS.CHATS);
   const q = query(
     chatsCollection,
+    where('workspaceId', '==', workspaceId),
     where('participants', 'array-contains', userId),
     orderBy('lastUpdated', 'desc')
   );
@@ -141,8 +174,8 @@ export const getUserChats = async (userId: string): Promise<Chat[]> => {
   return snapshot.docs.map(doc => chatConverter.fromFirestore(doc));
 };
 
-// Subscribe to user chats
-export const subscribeToUserChats = (userId: string, callback: (chats: Chat[]) => void) => {
+// Subscribe to user chats in a workspace
+export const subscribeToWorkspaceChats = (workspaceId: string, userId: string, callback: (chats: Chat[]) => void) => {
   const chatsCollection = collection(db, COLLECTIONS.CHATS);
   const q = query(
     chatsCollection,
@@ -156,8 +189,14 @@ export const subscribeToUserChats = (userId: string, callback: (chats: Chat[]) =
   });
 };
 
-// Create a message
-export const sendMessage = async (chatId: string, message: Omit<Message, 'id'>): Promise<Message> => {
+// Create a message with workspace check
+export const sendMessage = async (chatId: string, message: Omit<Message, 'id'>, userId: string): Promise<Message> => {
+  // Get the chat to check workspace access
+  const chat = await getChatById(chatId, userId);
+  if (!chat) {
+    throw new Error('Chat not found');
+  }
+
   const messagesCollection = collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES);
   const docRef = await addDoc(messagesCollection, messageConverter.toFirestore(message));
   
@@ -178,8 +217,14 @@ export const sendMessage = async (chatId: string, message: Omit<Message, 'id'>):
   return messageConverter.fromFirestore(messageDoc);
 };
 
-// Get messages for a chat
-export const getChatMessages = async (chatId: string, msgLimit = 50): Promise<Message[]> => {
+// Get messages for a chat with workspace check
+export const getChatMessages = async (chatId: string, userId: string, msgLimit = 50): Promise<Message[]> => {
+  // Get the chat to check workspace access
+  const chat = await getChatById(chatId, userId);
+  if (!chat) {
+    throw new Error('Chat not found');
+  }
+
   const messagesCollection = collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES);
   const q = query(
     messagesCollection,
@@ -193,12 +238,19 @@ export const getChatMessages = async (chatId: string, msgLimit = 50): Promise<Me
     .reverse(); // Reverse to get oldest messages first
 };
 
-// Subscribe to chat messages
-export const subscribeToChatMessages = (
-  chatId: string, 
+// Subscribe to chat messages with workspace check
+export const subscribeToChatMessages = async (
+  chatId: string,
+  userId: string,
   callback: (messages: Message[]) => void,
   messageLimit = 50
 ) => {
+  // Get the chat to check workspace access
+  const chat = await getChatById(chatId, userId);
+  if (!chat) {
+    throw new Error('Chat not found');
+  }
+
   const messagesCollection = collection(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES);
   const q = query(
     messagesCollection,
@@ -212,17 +264,19 @@ export const subscribeToChatMessages = (
   });
 };
 
-// Create a direct message chat between two users
+// Create a direct message chat between two users in a workspace
 export const createDirectMessageChat = async (
+  workspaceId: string,
   userId1: string,
   userId2: string,
   userName1: string,
   userName2: string
 ): Promise<Chat> => {
-  // Check if chat already exists
+  // Check if chat already exists in the workspace
   const chatsCollection = collection(db, COLLECTIONS.CHATS);
   const q = query(
     chatsCollection,
+    where('workspaceId', '==', workspaceId),
     where('type', '==', 'direct'),
     where('participants', 'array-contains', userId1)
   );
@@ -239,6 +293,7 @@ export const createDirectMessageChat = async (
   
   // Create new direct message chat
   return createChat({
+    workspaceId,
     type: 'direct',
     name: `${userName1}, ${userName2}`,
     participants: [userId1, userId2],
@@ -248,16 +303,18 @@ export const createDirectMessageChat = async (
         [userId2]: userName2
       }
     }
-  });
+  }, userId1);
 };
 
-// Create a channel chat
+// Create a channel chat in a workspace
 export const createChannelChat = async (
+  workspaceId: string,
   name: string,
   description: string,
   creatorId: string
 ): Promise<Chat> => {
   return createChat({
+    workspaceId,
     type: 'channel',
     name,
     description,
@@ -265,43 +322,48 @@ export const createChannelChat = async (
     meta: {
       createdBy: creatorId
     }
-  });
+  }, creatorId);
 };
 
-// Add user to chat
-export const addUserToChat = async (chatId: string, userId: string): Promise<void> => {
-  const chatDoc = doc(db, COLLECTIONS.CHATS, chatId);
-  const chatSnapshot = await getDoc(chatDoc);
-  
-  if (!chatSnapshot.exists()) {
+// Add user to chat with workspace membership check
+export const addUserToChat = async (chatId: string, userToAddId: string, requestingUserId: string): Promise<void> => {
+  // Get the chat to check workspace access
+  const chat = await getChatById(chatId, requestingUserId);
+  if (!chat) {
     throw new Error('Chat not found');
   }
+
+  // Verify the user to be added is also a workspace member
+  if (!await checkWorkspaceMembership(userToAddId, chat.workspaceId)) {
+    throw new Error('User to be added is not a member of this workspace');
+  }
+
+  const chatDoc = doc(db, COLLECTIONS.CHATS, chatId);
+  const chatSnapshot = await getDoc(chatDoc);
+  const participants = chatSnapshot.data()?.participants || [];
   
-  const chatData = chatSnapshot.data();
-  const participants = chatData.participants || [];
-  
-  if (!participants.includes(userId)) {
+  if (!participants.includes(userToAddId)) {
     await updateDoc(chatDoc, {
-      participants: [...participants, userId],
+      participants: [...participants, userToAddId],
       lastUpdated: serverTimestamp()
     });
   }
 };
 
-// Remove user from chat
-export const removeUserFromChat = async (chatId: string, userId: string): Promise<void> => {
-  const chatDoc = doc(db, COLLECTIONS.CHATS, chatId);
-  const chatSnapshot = await getDoc(chatDoc);
-  
-  if (!chatSnapshot.exists()) {
+// Remove user from chat with workspace check
+export const removeUserFromChat = async (chatId: string, userToRemoveId: string, requestingUserId: string): Promise<void> => {
+  // Get the chat to check workspace access
+  const chat = await getChatById(chatId, requestingUserId);
+  if (!chat) {
     throw new Error('Chat not found');
   }
-  
-  const chatData = chatSnapshot.data();
-  const participants = chatData.participants || [];
+
+  const chatDoc = doc(db, COLLECTIONS.CHATS, chatId);
+  const chatSnapshot = await getDoc(chatDoc);
+  const participants = chatSnapshot.data()?.participants || [];
   
   await updateDoc(chatDoc, {
-    participants: participants.filter((id: string) => id !== userId),
+    participants: participants.filter((id: string) => id !== userToRemoveId),
     lastUpdated: serverTimestamp()
   });
 };

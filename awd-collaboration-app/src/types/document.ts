@@ -38,7 +38,7 @@ export interface DocumentPermissions {
   commenters: string[]; // User IDs
   public: boolean;
   publicPermission?: CollaborationPermission;
-  workspaceId?: string;
+  workspaceId: string; // Required to enforce workspace boundaries
 }
 
 export interface Document {
@@ -60,7 +60,7 @@ export interface Document {
   currentVersionId?: string;
   permissions: DocumentPermissions;
   comments?: DocumentComment[];
-  workspace?: {
+  workspace: {
     id: string;
     name: string;
   };

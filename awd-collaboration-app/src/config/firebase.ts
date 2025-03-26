@@ -35,4 +35,6 @@ export const COLLECTIONS = {
   CHATS: 'chats',
   MESSAGES: 'messages',
   EVENTS: 'events',
+  WORKSPACES: 'workspaces',
+  WORKSPACE_INVITATIONS: 'workspace-invitations'
 } as const;

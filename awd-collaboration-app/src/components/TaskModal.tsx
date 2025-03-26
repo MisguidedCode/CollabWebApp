@@ -15,8 +15,9 @@ interface TaskModalProps {
 }
 
 const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
-  const dispatch = useAppDispatch();
-  const user = useSelector((state: RootState) => state.auth.user);
+const dispatch = useAppDispatch();
+const user = useSelector((state: RootState) => state.auth.user);
+const workspaceId = useSelector((state: RootState) => state.workspace.currentWorkspaceId);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -100,8 +101,14 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
       console.log("Submitting task with attachments:", attachments);
       
       // Create task data object
+      if (!workspaceId) {
+        setError('No workspace selected');
+        return;
+      }
+
       const taskData: Task = {
         id: editTask?.id || crypto.randomUUID(),
+        workspaceId,
         title: formData.title,
         description: formData.description,
         priority: formData.priority,

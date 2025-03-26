@@ -24,8 +24,7 @@ const MessageInput = ({ chatId }: MessageInputProps) => {
       setIsSubmitting(true);
       await dispatch(sendMessage({ 
         chatId, 
-        content: message.trim(), 
-        senderId: user.uid 
+        content: message.trim()
       })).unwrap();
       setMessage('');
     } catch (error) {

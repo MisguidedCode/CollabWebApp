@@ -16,20 +16,43 @@ import {
 } from 'firebase/firestore';
 import { db, COLLECTIONS } from '../config/firebase';
 import { Chat, Message, ChatType } from '../types/chat';
+import { createChannelChatEnhanced } from './createChannel';
 
 // Helper function to check workspace membership
 const checkWorkspaceMembership = async (userId: string, workspaceId: string): Promise<boolean> => {
-  const workspaceDoc = doc(db, COLLECTIONS.WORKSPACES, workspaceId);
-  const snapshot = await getDoc(workspaceDoc);
-  
-  if (!snapshot.exists()) {
+  try {
+    const workspaceDoc = doc(db, COLLECTIONS.WORKSPACES, workspaceId);
+    const snapshot = await getDoc(workspaceDoc);
+    
+    if (!snapshot.exists()) {
+      console.log('Workspace document does not exist:', workspaceId);
+      return false;
+    }
+    
+    const data = snapshot.data();
+    if (!data) {
+      console.log('No data in workspace document:', workspaceId);
+      return false;
+    }
+
+    if (!Array.isArray(data.members)) {
+      console.log('Members field is not an array in workspace:', workspaceId);
+      return false;
+    }
+
+    const isMember = data.members.some((member: any) => {
+      if (!member || typeof member !== 'object') {
+        console.log('Invalid member entry in workspace:', workspaceId);
+        return false;
+      }
+      return member.userId === userId && member.status === 'active';
+    });
+
+    return isMember;
+  } catch (error) {
+    console.error('Error checking workspace membership:', error);
     return false;
   }
-  
-  const workspace = snapshot.data();
-  return workspace.members.some((member: any) => 
-    member.userId === userId && member.status === 'active'
-  );
 };
 
 // Helper function to safely convert Firestore timestamps to ISO strings
@@ -284,6 +307,7 @@ export const createDirectMessageChat = async (
   const snapshot = await getDocs(q);
   const existingChat = snapshot.docs.find(doc => {
     const data = doc.data();
+    if (!data || !Array.isArray(data.participants)) return false;
     return data.participants.includes(userId2);
   });
   
@@ -313,16 +337,17 @@ export const createChannelChat = async (
   description: string,
   creatorId: string
 ): Promise<Chat> => {
-  return createChat({
-    workspaceId,
-    type: 'channel',
-    name,
-    description,
-    participants: [creatorId],
-    meta: {
-      createdBy: creatorId
+  try {
+    // Verify workspace membership before creating channel
+    if (!await checkWorkspaceMembership(creatorId, workspaceId)) {
+      throw new Error('User is not a member of this workspace');
     }
-  }, creatorId);
+    
+    return await createChannelChatEnhanced(name, description, creatorId, workspaceId);
+  } catch (error) {
+    console.error('Error creating channel chat:', error);
+    throw error;
+  }
 };
 
 // Add user to chat with workspace membership check
@@ -340,11 +365,14 @@ export const addUserToChat = async (chatId: string, userToAddId: string, request
 
   const chatDoc = doc(db, COLLECTIONS.CHATS, chatId);
   const chatSnapshot = await getDoc(chatDoc);
-  const participants = chatSnapshot.data()?.participants || [];
+  const data = chatSnapshot.data();
+  if (!data || !Array.isArray(data.participants)) {
+    throw new Error('Invalid chat data structure');
+  }
   
-  if (!participants.includes(userToAddId)) {
+  if (!data.participants.includes(userToAddId)) {
     await updateDoc(chatDoc, {
-      participants: [...participants, userToAddId],
+      participants: [...data.participants, userToAddId],
       lastUpdated: serverTimestamp()
     });
   }
@@ -360,10 +388,13 @@ export const removeUserFromChat = async (chatId: string, userToRemoveId: string,
 
   const chatDoc = doc(db, COLLECTIONS.CHATS, chatId);
   const chatSnapshot = await getDoc(chatDoc);
-  const participants = chatSnapshot.data()?.participants || [];
+  const data = chatSnapshot.data();
+  if (!data || !Array.isArray(data.participants)) {
+    throw new Error('Invalid chat data structure');
+  }
   
   await updateDoc(chatDoc, {
-    participants: participants.filter((id: string) => id !== userToRemoveId),
+    participants: data.participants.filter((id: string) => id !== userToRemoveId),
     lastUpdated: serverTimestamp()
   });
 };

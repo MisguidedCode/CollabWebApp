@@ -7,9 +7,9 @@ import {
   sendMessage as sendMessageToFirestore,
   createDirectMessageChat,
   subscribeToWorkspaceChats,
-  subscribeToChatMessages
+  subscribeToChatMessages,
+  createChannelChat
 } from '../../services/chatService';
-import { createChannelChatEnhanced } from '../../services/createChannel';
 import { 
   registerSubscription, 
   unregisterSubscription,
@@ -129,8 +129,8 @@ export const createChannel = createAsyncThunk(
         throw new Error('User or workspace not selected');
       }
 
-      console.log('Creating channel:', { name, description, creatorId: userId });
-      return await createChannelChatEnhanced(name, description, userId);
+      console.log('Creating channel:', { name, description, creatorId: userId, workspaceId });
+      return await createChannelChat(workspaceId, name, description, userId);
     } catch (error) {
       console.error('Error creating channel:', error);
       return rejectWithValue((error as Error).message);

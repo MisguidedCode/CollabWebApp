@@ -36,9 +36,10 @@ import {
   export const createChannelChatEnhanced = async (
     name: string,
     description: string,
-    creatorId: string
+    creatorId: string,
+    workspaceId: string
   ): Promise<Chat> => {
-    console.log('Starting enhanced channel creation:', { name, description, creatorId });
+    console.log('Starting enhanced channel creation:', { name, description, creatorId, workspaceId });
   
     try {
       // Create a reference for a new document with an auto-generated ID
@@ -54,6 +55,7 @@ import {
         type: 'channel' as const,
         name,
         description,
+        workspaceId,
         participants: [creatorId],
         meta: {
           createdBy: creatorId
@@ -85,6 +87,7 @@ import {
         type: 'channel',
         name: data.name,
         description: data.description,
+        workspaceId: data.workspaceId,
         participants: data.participants,
         meta: data.meta,
         createdAt: convertTimestampToString(data.createdAt),

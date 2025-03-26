@@ -246,7 +246,16 @@ const workspaceSlice = createSlice({
   initialState,
   reducers: {
     setWorkspaces: (state, action: PayloadAction<Workspace[]>) => {
+      // Always use Firestore data directly
       state.workspaces = action.payload;
+      
+      // Sort workspaces for consistency
+      state.workspaces.sort((a, b) => a.name.localeCompare(b.name));
+      
+      // If current workspace is not in the new list, reset it
+      if (state.currentWorkspaceId && !action.payload.some(w => w.id === state.currentWorkspaceId)) {
+        state.currentWorkspaceId = action.payload.length > 0 ? action.payload[0].id : null;
+      }
     },
     
     setCurrentWorkspace: (state, action: PayloadAction<string | null>) => {
@@ -257,17 +266,11 @@ const workspaceSlice = createSlice({
       state.invitations = action.payload;
     },
     
-    // Modified: we'll only clear workspaces when explicitly called
+    // Reset workspace state completely
     resetWorkspaceState: () => initialState,
 
-    // Added: separate function to clear only on logout
-    clearWorkspaceState: (state) => {
-      // This preserves workspaces in local storage but clears them from memory
-      return {
-        ...initialState,
-        loading: false
-      };
-    },
+    // Clear workspace state completely on logout
+    clearWorkspaceState: () => initialState,
   },
   extraReducers: (builder) => {
     // fetchUserWorkspaces
@@ -276,7 +279,12 @@ const workspaceSlice = createSlice({
       state.error = null;
     });
     builder.addCase(fetchUserWorkspaces.fulfilled, (state, action) => {
+      // Only use workspaces from Firestore
       state.workspaces = action.payload;
+      
+      // Sort workspaces by name for consistency
+      state.workspaces.sort((a, b) => a.name.localeCompare(b.name));
+      
       state.loading = false;
       
       // Set first workspace as current if none selected

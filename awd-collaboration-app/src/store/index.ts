@@ -21,16 +21,7 @@ const isFirestoreTimestamp = (value: any): boolean => {
   );
 };
 
-// Load workspace state from localStorage if available
-const persistedWorkspaceState = loadState('workspaceState', {
-  workspaces: [],
-  currentWorkspaceId: null,
-  invitations: [],
-  loading: false,
-  error: null
-});
-
-// Load document state from localStorage if available
+// Only persist document state from localStorage
 const persistedDocumentState = loadState('documentState', {
   documents: [],
   currentDocument: null,
@@ -50,8 +41,7 @@ export const store = configureStore({
     documents: documentReducer,
   },
   preloadedState: {
-    // Preload states from localStorage
-    workspace: persistedWorkspaceState,
+    // Only preload document state from localStorage
     documents: persistedDocumentState
   },
   middleware: (getDefaultMiddleware) =>
@@ -100,11 +90,20 @@ export const store = configureStore({
     }),
 });
 
-// Subscribe to store changes to save states to localStorage
+// Subscribe to store changes to save document state to localStorage
 store.subscribe(() => {
   const state = store.getState();
-  saveState('workspaceState', state.workspace);
-  saveState('documentState', state.documents);
+  
+  // Only persist document state
+  if (!saveState('documentState', state.documents)) {
+    console.warn('Failed to persist document state to localStorage');
+  }
+  
+  // Verify document persistence
+  const savedDocumentState = loadState('documentState', null);
+  if (!savedDocumentState) {
+    console.warn('Document state persistence verification failed');
+  }
 });
 
 export type RootState = ReturnType<typeof store.getState>;

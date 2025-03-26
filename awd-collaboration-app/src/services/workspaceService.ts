@@ -176,29 +176,42 @@ import {
   // Get all workspaces for a user
   export const getUserWorkspaces = async (userId: string): Promise<Workspace[]> => {
     const workspacesCollection = collection(db, UPDATED_COLLECTIONS.WORKSPACES);
+    // Get all workspaces and filter for active members manually since Firestore
+    // doesn't support complex array-contains queries
     const q = query(
       workspacesCollection,
-      where('members', 'array-contains', { userId, status: 'active' }),
       orderBy('createdAt', 'desc')
     );
     
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => workspaceConverter.fromFirestore(doc));
+    return snapshot.docs
+      .map(doc => workspaceConverter.fromFirestore(doc))
+      .filter(workspace => 
+        workspace.members.some(member => 
+          member.userId === userId && member.status === 'active'
+        )
+      );
   };
   
   // Subscribe to user's workspaces
   export const subscribeToUserWorkspaces = (userId: string, callback: (workspaces: Workspace[]) => void) => {
     const workspacesCollection = collection(db, UPDATED_COLLECTIONS.WORKSPACES);
     
-    // Query for workspaces where the user is a member
+    // Query all workspaces and filter client-side since Firestore
+    // doesn't support complex array-contains queries
     const q = query(
       workspacesCollection,
-      where('members', 'array-contains', { userId, status: 'active' }),
       orderBy('createdAt', 'desc')
     );
     
     return onSnapshot(q, (snapshot) => {
-      const workspaces = snapshot.docs.map(doc => workspaceConverter.fromFirestore(doc));
+      const workspaces = snapshot.docs
+        .map(doc => workspaceConverter.fromFirestore(doc))
+        .filter(workspace => 
+          workspace.members.some(member => 
+            member.userId === userId && member.status === 'active'
+          )
+        );
       callback(workspaces);
     });
   };

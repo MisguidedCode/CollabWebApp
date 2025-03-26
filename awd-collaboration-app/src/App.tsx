@@ -65,13 +65,9 @@ const AppContent = () => {
       // Initialize documents subscription
       dispatch(fetchUserDocumentsThunk(user.uid));
       
-      // Initialize workspaces subscription - we now ensure this happens on login/reload
-      if (workspaces.length === 0) {
-        console.log('No workspaces in state, fetching from Firestore');
-        dispatch(fetchUserWorkspaces(user.uid));
-      } else {
-        console.log('Workspaces already in state:', workspaces.length);
-      }
+      // Always initialize workspaces subscription on mount/refresh
+      console.log('Initializing workspace subscriptions');
+      dispatch(fetchUserWorkspaces(user.uid));
       
       // Initialize workspace invitations subscription (if user has email)
       if (user.email) {
@@ -90,7 +86,7 @@ const AppContent = () => {
       // For extra safety, unregister all subscriptions
       unregisterAllSubscriptions();
     };
-  }, [user, authLoading, dispatch, workspaces.length]);
+  }, [user, authLoading, dispatch]);
 
   return (
     <Router>

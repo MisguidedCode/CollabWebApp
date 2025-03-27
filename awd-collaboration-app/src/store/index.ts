@@ -1,8 +1,10 @@
 import { configureStore, isPlainObject } from '@reduxjs/toolkit';
 import { useDispatch } from 'react-redux';
 
-// Import reducers
+// Import reducers and middleware
 import taskReducer from './slices/taskSlice';
+import websocketReducer from './slices/websocketSlice';
+import { socketMiddleware } from './middleware/socketMiddleware';
 import chatReducer from './slices/chatSlice';
 import authReducer from './slices/authSlice';
 import calendarReducer from './slices/calendarSlice';
@@ -30,13 +32,17 @@ export const store = configureStore({
     calendar: calendarReducer,
     workspace: workspaceReducer,
     documents: documentReducer,
+    websocket: websocketReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
         // Ignore these specific action types
         ignoredActions: [
-          // Add any action types to ignore here
+          // WebSocket-related actions that may contain non-serializable content
+          'websocket/error',
+          'websocket/statusChanged',
+          'websocket/messageReceived',
         ],
         
         // Function to check if a value is serializable
@@ -74,7 +80,7 @@ export const store = configureStore({
                 value === undefined;
         },
       },
-    }),
+    }).concat(socketMiddleware),
 });
 
 export type RootState = ReturnType<typeof store.getState>;

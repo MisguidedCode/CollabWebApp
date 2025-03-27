@@ -488,6 +488,22 @@ export const deleteMessage = async (
   });
 };
 
+// Delete channel with workspace and ownership check
+export const deleteChannel = async (chatId: string, userId: string): Promise<void> => {
+  const chat = await getChatById(chatId, userId);
+  if (!chat) {
+    throw new Error('Chat not found');
+  }
+
+  if (chat.type !== 'channel') {
+    throw new Error('Can only delete channel type chats');
+  }
+
+  // Delete the chat document and all its messages
+  const chatDoc = doc(db, COLLECTIONS.CHATS, chatId);
+  await deleteDoc(chatDoc);
+};
+
 export const removeUserFromChat = async (chatId: string, userToRemoveId: string, requestingUserId: string): Promise<void> => {
   // Get the chat to check workspace access
   const chat = await getChatById(chatId, requestingUserId);

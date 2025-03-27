@@ -270,6 +270,18 @@ const chatSlice = createSlice({
   }
 });
 
+// Delete a channel
+export const deleteChannel = createAsyncThunk(
+  'chat/deleteChannel',
+  async (chatId: string, { getState }: any) => {
+    const userId = getState().auth.user?.uid;
+    if (!userId) throw new Error('User not authenticated');
+    
+    await chatService.deleteChannel(chatId, userId);
+    return chatId;
+  }
+);
+
 // Create a new channel
 export const createChannel = createAsyncThunk(
   'chat/createChannel',

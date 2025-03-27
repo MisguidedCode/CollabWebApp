@@ -475,7 +475,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
         {/* Collaborators */}
         <div className="flex items-center ml-4">
           {Object.values(collaborators).length > 0 && (
-            <div className="flex items-center space-x-1 mr-2">
+            <div key={`collaborators-container-${Object.values(collaborators).length}`} className="flex items-center space-x-1 mr-2">
               {Object.values(collaborators).map((collaborator) => (
                 <div
                   key={collaborator.user.id}

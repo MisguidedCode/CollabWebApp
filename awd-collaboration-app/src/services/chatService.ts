@@ -186,15 +186,27 @@ export const getWorkspaceChats = async (workspaceId: string, userId: string): Pr
   }
 
   const chatsCollection = collection(db, COLLECTIONS.CHATS);
+  
+  // Query for channels in the workspace OR direct messages where user is a participant
   const q = query(
     chatsCollection,
     where('workspaceId', '==', workspaceId),
-    where('participants', 'array-contains', userId),
+    // Use OR condition for channels and direct messages
+    where('type', 'in', ['channel', 'direct']),
     orderBy('lastUpdated', 'desc')
   );
   
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => chatConverter.fromFirestore(doc));
+  
+  // Filter results: include all channels and only direct messages where user is a participant
+  const chats = snapshot.docs
+    .map(doc => chatConverter.fromFirestore(doc))
+    .filter(chat => 
+      chat.type === 'channel' || // Include all channels
+      (chat.type === 'direct' && chat.participants.includes(userId)) // Only include DMs where user is participant
+    );
+    
+  return chats;
 };
 
 // Subscribe to user chats in a workspace
@@ -202,12 +214,18 @@ export const subscribeToWorkspaceChats = (workspaceId: string, userId: string, c
   const chatsCollection = collection(db, COLLECTIONS.CHATS);
   const q = query(
     chatsCollection,
-    where('participants', 'array-contains', userId),
+    where('workspaceId', '==', workspaceId),
+    where('type', 'in', ['channel', 'direct']),
     orderBy('lastUpdated', 'desc')
   );
   
   return onSnapshot(q, (snapshot) => {
-    const chats = snapshot.docs.map(doc => chatConverter.fromFirestore(doc));
+    const chats = snapshot.docs
+      .map(doc => chatConverter.fromFirestore(doc))
+      .filter(chat => 
+        chat.type === 'channel' || // Include all channels
+        (chat.type === 'direct' && chat.participants.includes(userId)) // Only include DMs where user is participant
+      );
     callback(chats);
   });
 };

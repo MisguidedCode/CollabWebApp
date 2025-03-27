@@ -396,13 +396,18 @@ const documentSlice = createSlice({
       state.error = null;
     });
     builder.addCase(deleteDocumentThunk.fulfilled, (state, action) => {
-      state.documents = state.documents.filter(doc => doc.id !== action.payload);
-      state.recentDocuments = state.recentDocuments.filter(doc => doc.id !== action.payload);
-      state.starredDocuments = state.starredDocuments.filter(doc => doc.id !== action.payload);
-      if (state.currentDocument && state.currentDocument.id === action.payload) {
+      // Add null checks and default to empty arrays if undefined
+      state.documents = (state.documents || []).filter(doc => doc.id !== action.payload);
+      state.recentDocuments = (state.recentDocuments || []).filter(doc => doc.id !== action.payload);
+      state.starredDocuments = (state.starredDocuments || []).filter(doc => doc.id !== action.payload);
+
+      // Clean up currentDocument if it's the deleted document
+      if (state.currentDocument?.id === action.payload) {
         state.currentDocument = null;
       }
+
       state.loading = false;
+      state.error = null; // Clear any previous errors
     });
     builder.addCase(deleteDocumentThunk.rejected, (state, action) => {
       state.loading = false;

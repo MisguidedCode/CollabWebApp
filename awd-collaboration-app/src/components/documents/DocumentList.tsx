@@ -92,9 +92,16 @@ const DocumentList: React.FC<DocumentListProps> = ({
     
     if (window.confirm(`Are you sure you want to delete "${document.title}"?`)) {
       try {
-        await dispatch(deleteDocumentThunk(document.id)).unwrap();
+        await dispatch(deleteDocumentThunk({
+          documentId: document.id,
+          userId: user!.uid
+        })).unwrap();
+        
+        // Document deleted successfully - handled by Redux state
       } catch (error) {
         console.error('Failed to delete document:', error);
+        // Show error alert to user
+        window.alert(`Failed to delete document: ${error instanceof Error ? error.message : 'Unknown error occurred'}`);
       }
     }
     

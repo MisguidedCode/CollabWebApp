@@ -9,13 +9,15 @@ import documentReducer, {
   resetDocumentState,
   fetchUserDocumentsThunk,
   uploadDocumentContentThunk,
+  deleteDocumentThunk
 } from '../documentSlice';
-import type { Document, DocumentComment } from '../../../types/document';
+import type { Document, DocumentComment, DocumentState } from '../../../types/document';
 
 // Mock document service
 jest.mock('../../../services/documentService', () => ({
   getWorkspaceDocuments: jest.fn(),
   uploadDocumentContent: jest.fn(),
+  deleteDocument: jest.fn(),
 }));
 
 describe('Document Slice', () => {
@@ -61,8 +63,85 @@ describe('Document Slice', () => {
       reducer: {
         documents: documentReducer,
       },
+  });
+
+  describe('Delete Document', () => {
+    it('should handle document deletion success', async () => {
+      // Setup initial state with a document
+      store.dispatch(setDocuments([mockDocument]));
+      store.dispatch(setCurrentDocument(mockDocument));
+      store.dispatch(starDocument(mockDocument.id));
+
+      // Mock the delete function
+      const deleteDocument = require('../../../services/documentService').deleteDocument;
+      deleteDocument.mockResolvedValue(undefined);
+
+      // Attempt deletion
+      await store.dispatch(deleteDocumentThunk({
+        documentId: mockDocument.id,
+        userId: 'test-user'
+      }));
+
+      const state = store.getState().documents;
+
+      // Check if document was removed from all arrays
+      expect(state.documents).not.toContainEqual(mockDocument);
+      expect(state.starredDocuments).not.toContainEqual(mockDocument);
+      expect(state.currentDocument).toBeNull();
+      expect(state.loading).toBe(false);
+      expect(state.error).toBeNull();
+    });
+
+    it('should handle document deletion error', async () => {
+      const deleteDocument = require('../../../services/documentService').deleteDocument;
+      deleteDocument.mockRejectedValue(new Error('Failed to delete document'));
+
+      await store.dispatch(deleteDocumentThunk({
+        documentId: mockDocument.id,
+        userId: 'test-user'
+      }));
+
+      const state = store.getState().documents;
+      expect(state.loading).toBe(false);
+      expect(state.error).toBe('Failed to delete document');
+    });
+
+    it('should handle deletion of non-existent arrays in state', async () => {
+      // Create a state without some arrays
+      const partialState: DocumentState = {
+        documents: [mockDocument],
+        currentDocument: null,
+        recentDocuments: [],
+        starredDocuments: [],
+        loading: false,
+        error: null
+      };
+      
+      store = configureStore({
+        reducer: {
+          documents: documentReducer
+        },
+        preloadedState: {
+          documents: partialState
+        }
+      });
+
+      const deleteDocument = require('../../../services/documentService').deleteDocument;
+      deleteDocument.mockResolvedValue(undefined);
+
+      // This should not throw even though some arrays are undefined
+      await store.dispatch(deleteDocumentThunk({
+        documentId: mockDocument.id,
+        userId: 'test-user'
+      }));
+
+      const state = store.getState().documents;
+      expect(state.documents).not.toContainEqual(mockDocument);
+      expect(state.loading).toBe(false);
+      expect(state.error).toBeNull();
     });
   });
+});
 
   describe('Reducers', () => {
     it('should set documents', () => {

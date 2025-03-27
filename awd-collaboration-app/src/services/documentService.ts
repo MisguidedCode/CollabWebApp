@@ -18,7 +18,8 @@ import {
   import { db, storage } from '../config/firebase';
   import { Document, DocumentVersion, DocumentComment } from '../types/document';
   import { convertTimestampToString } from '../utils/firestoreHelpers';
-  import { registerSubscription } from '../utils/subscriptionManager';
+import { registerSubscription, unregisterSubscriptionsByPrefix } from '../utils/subscriptionManager';
+import { documentStorage } from '../utils/documentStorage';
   
   // Helper function to check workspace membership
   const checkWorkspaceMembership = async (userId: string, workspaceId: string): Promise<boolean> => {
@@ -226,8 +227,9 @@ import {
     await updateDoc(documentDoc, documentConverter.toFirestore(document));
   };
   
-  // Delete a document with workspace check
-  export const deleteDocument = async (documentId: string, userId: string): Promise<void> => {
+// Delete a document with workspace check
+export const deleteDocument = async (documentId: string, userId: string): Promise<void> => {
+  try {
     // Verify access and get document to check if user is owner
     const document = await verifyDocumentAccess(documentId, userId);
     
@@ -236,9 +238,46 @@ import {
       throw new Error('Only document owner can delete the document');
     }
     
-    const documentDoc = doc(db, COLLECTIONS.DOCUMENTS, documentId);
-    await deleteDoc(documentDoc);
-  };
+    const documentRef = doc(db, COLLECTIONS.DOCUMENTS, documentId);
+    const commentsRef = collection(documentRef, COLLECTIONS.DOCUMENT_COMMENTS);
+    const versionsRef = collection(documentRef, COLLECTIONS.DOCUMENT_VERSIONS);
+
+    // Delete document contents from storage if they exist
+    if (document.contentUrl) {
+      try {
+        const contentRef = ref(storage, document.contentUrl);
+        await deleteObject(contentRef);
+      } catch (error) {
+        console.error('Error deleting document content:', error);
+        // Continue with document deletion even if content deletion fails
+      }
+    }
+
+    // Delete all comments
+    const commentDocs = await getDocs(commentsRef);
+    await Promise.all(
+      commentDocs.docs.map(doc => deleteDoc(doc.ref))
+    );
+
+    // Delete all versions
+    const versionDocs = await getDocs(versionsRef);
+    await Promise.all(
+      versionDocs.docs.map(doc => deleteDoc(doc.ref))
+    );
+
+    // Delete the document itself
+    await deleteDoc(documentRef);
+
+    // Clean up any local drafts
+    documentStorage.removeDraft(documentId);
+
+    // Unsubscribe from WebSocket
+    unregisterSubscriptionsByPrefix(`document-${documentId}`);
+  } catch (error) {
+    console.error('Error deleting document:', error);
+    throw error;
+  }
+};
   
   // Upload document content with workspace check
   export const uploadDocumentContent = async (

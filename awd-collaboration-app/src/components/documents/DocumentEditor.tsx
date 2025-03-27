@@ -6,6 +6,7 @@ import CollaborationCursor from '@tiptap/extension-collaboration-cursor';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { useSelector } from 'react-redux';
+import { documentStorage } from '../../utils/documentStorage';
 import { RootState, useAppDispatch } from '../../store';
 import {
   updateDocumentThunk,
@@ -71,7 +72,13 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
   const [isSaving, setIsSaving] = useState(false);
   const [isConnecting, setIsConnecting] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasDraft, setHasDraft] = useState(false);
   const [collaborators, setCollaborators] = useState<{[key: string]: ProviderAwarenessState}>({});
+  const [isRestoringDraft, setIsRestoringDraft] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [lastDraftSavedAt, setLastDraftSavedAt] = useState<Date | null>(null);
+  const [nextAutoSaveIn, setNextAutoSaveIn] = useState<number>(30);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
   // References for Yjs and WebsocketProvider
   const ydocRef = useRef<Y.Doc | null>(null);
@@ -193,41 +200,129 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
     ],
     editable: !readOnly,
     content: '',
+    onUpdate: ({ editor }) => {
+      // Set unsaved changes flag when content changes
+      setHasUnsavedChanges(true);
+    }
   }, [fragmentRef.current, providerRef.current, user, readOnly]);
-  
+
+  // Handle unsaved changes warning
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        const message = 'You have unsaved changes. Are you sure you want to leave?';
+        e.returnValue = message;
+        return message;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // Check for existing draft on load
+  useEffect(() => {
+    if (!documentId || !user || readOnly) return;
+    
+    const draft = documentStorage.getDraft(documentId);
+    if (draft) {
+      setHasDraft(true);
+    }
+  }, [documentId, user, readOnly]);
+
+  // Handle draft restoration
+  useEffect(() => {
+    if (!documentId || !user || !editor || !hasDraft || isRestoringDraft || readOnly) return;
+
+    const restoreDraft = async () => {
+      const draft = documentStorage.getDraft(documentId);
+      if (!draft) return;
+
+      const shouldRestore = window.confirm(
+        `A draft from ${new Date(draft.lastModified).toLocaleString()} was found. Would you like to restore it?`
+      );
+
+      if (shouldRestore) {
+        setIsRestoringDraft(true);
+        editor.commands.setContent(draft.content);
+        // Remove the draft after restoration
+        documentStorage.removeDraft(documentId);
+        setHasDraft(false);
+        setIsRestoringDraft(false);
+      } else {
+        // User declined, remove the draft
+        documentStorage.removeDraft(documentId);
+        setHasDraft(false);
+      }
+    };
+
+    restoreDraft();
+  }, [documentId, user, editor, hasDraft, isRestoringDraft, readOnly]);
+
+  // Auto-save draft every 30 seconds
+  useEffect(() => {
+    if (!documentId || !editor || !user || readOnly) return;
+
+    // Auto-save interval (30 seconds)
+    const autoSaveInterval = setInterval(async () => {
+      const content = editor.getHTML();
+      await documentStorage.saveDraft(documentId, content);
+      setLastDraftSavedAt(new Date());
+      setNextAutoSaveIn(30);
+    }, 30000);
+
+    // Countdown timer for next auto-save
+    const countdownInterval = setInterval(() => {
+      setNextAutoSaveIn(prev => Math.max(0, prev - 1));
+    }, 1000);
+
+    return () => {
+      clearInterval(autoSaveInterval);
+      clearInterval(countdownInterval);
+    };
+  }, [documentId, editor, user, readOnly]);
+
   // Save document content
   const saveDocument = useCallback(async () => {
     if (!document || !editor || !user) return;
     
     try {
       setIsSaving(true);
-      
+
       // Get HTML content from editor
       const htmlContent = editor.getHTML();
       
-      // Create a new version with HTML content
-      await dispatch(uploadDocumentContentThunk({
+      // Upload content
+      const uploadSuccess = await dispatch(uploadDocumentContentThunk({
         documentId: document.id,
         content: htmlContent,
         userId: user.uid,
       })).unwrap();
-      
-      // Update document metadata
-      await dispatch(updateDocumentThunk({
-        document: {
-          ...document,
-          updatedBy: user.uid,
-          updatedAt: new Date().toISOString()
-        },
-        userId: user.uid
-      })).unwrap();
-      
-      // Call onSave callback if provided
-      if (onSave) {
-        onSave(document);
+
+      if (uploadSuccess) {
+        // Update document metadata
+        await dispatch(updateDocumentThunk({
+          document: {
+            ...document,
+            updatedBy: user.uid,
+            updatedAt: new Date().toISOString()
+          },
+          userId: user.uid
+        })).unwrap();
+
+        // Save metadata and remove draft
+        await documentStorage.saveMetadata(document);
+        documentStorage.removeDraft(document.id);
+        setLastSavedAt(new Date());
+        setHasUnsavedChanges(false);
+        
+        // Call onSave callback if provided
+        if (onSave) {
+          onSave(document);
+        }
+        
+        setError(null);
       }
-      
-      setError(null);
     } catch (err) {
       setError(`Failed to save document: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -253,7 +348,16 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
   }
   
   return (
-    <div className="flex flex-col h-full border border-gray-200 rounded-lg shadow-sm bg-white">
+    <div className="flex flex-col h-full border border-gray-200 rounded-lg shadow-sm bg-white relative">
+      {/* Editor Loading State */}
+      {!editor && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-10">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2 animate-spin"></div>
+            <div className="text-gray-600">Initializing editor...</div>
+          </div>
+        </div>
+      )}
       {/* Editor Toolbar */}
       {!readOnly && editor && (
         <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 bg-gray-50">
@@ -275,13 +379,23 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
           <Undo editor={editor} />
           <Redo editor={editor} />
           <div className="flex-grow" />
-          <Save onClick={saveDocument} isSaving={isSaving} />
+          {hasUnsavedChanges && (
+            <div className="text-sm text-yellow-600 mr-2 flex items-center">
+              <div className="w-2 h-2 mr-1 rounded-full bg-yellow-500 animate-pulse"></div>
+              Unsaved changes
+            </div>
+          )}
+          <Save 
+            onClick={saveDocument} 
+            isSaving={isSaving}
+          />
         </div>
       )}
       
-      {/* Collaboration Status */}
-      <div className="flex items-center p-2 border-b border-gray-200 bg-gray-50">
-        <div className="flex-grow">
+      {/* Status Bar */}
+      <div className="flex items-center justify-between p-2 border-b border-gray-200 bg-gray-50">
+        {/* Connection Status */}
+        <div className="flex items-center">
           {isConnecting ? (
             <div className="flex items-center text-yellow-600">
               <div className="w-2 h-2 mr-2 rounded-full bg-yellow-500 animate-pulse"></div>
@@ -300,8 +414,66 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
           )}
         </div>
         
+        {/* Save Status & Draft Info */}
+        <div className="flex items-center gap-4">
+          {/* Save Status */}
+          <div className="text-sm text-gray-500">
+            <span className="flex items-center">
+              {isSaving ? (
+                <>
+                  <div className="w-2 h-2 mr-2 rounded-full bg-blue-500 animate-pulse"></div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <div className="w-2 h-2 mr-2 rounded-full bg-green-500"></div>
+                  {lastSavedAt ? (
+                    <>
+                      Saved {lastSavedAt.toLocaleTimeString()} 
+                      {lastSavedAt.toDateString() !== new Date().toDateString() && 
+                        ` on ${lastSavedAt.toLocaleDateString()}`
+                      }
+                    </>
+                  ) : (
+                    'All changes saved'
+                  )}
+                </>
+              )}
+            </span>
+          </div>
+
+          {/* Auto-save Status */}
+          {!readOnly && (
+            <div className="text-sm text-gray-400">
+              <span className="flex items-center">
+                <div className={`w-1.5 h-1.5 mr-2 rounded-full ${
+                  nextAutoSaveIn === 0 ? 'bg-blue-400 animate-ping' : 'bg-gray-400'
+                }`}></div>
+                {lastDraftSavedAt ? (
+                  <>
+                    Auto-saved {lastDraftSavedAt.toLocaleTimeString()} 
+                    {nextAutoSaveIn > 0 && ` · Next in ${nextAutoSaveIn}s`}
+                  </>
+                ) : (
+                  `Auto-save in ${nextAutoSaveIn}s`
+                )}
+              </span>
+            </div>
+          )}
+
+          {/* Draft Available */}
+          {hasDraft && !isRestoringDraft && (
+            <div className="text-sm text-yellow-600">
+              <span className="flex items-center">
+                <div className="w-2 h-2 mr-2 rounded-full bg-yellow-500"></div>
+                Unsaved draft available
+              </span>
+            </div>
+          )}
+        </div>
+
         {/* Collaborators */}
-        <div className="flex items-center">
+        <div className="flex items-center ml-4">
           {Object.values(collaborators).length > 0 && (
             <div className="flex items-center space-x-1 mr-2">
               {Object.values(collaborators).map((collaborator) => (

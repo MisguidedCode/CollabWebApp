@@ -21,6 +21,9 @@ import {
   unregisterSubscriptionsByPrefix
 } from '../../utils/subscriptionManager';
 
+// Storage key for persisting current workspace
+const STORAGE_KEY = 'CURRENT_WORKSPACE_ID';
+
 const initialState: WorkspaceState = {
   workspaces: [],
   currentWorkspaceId: null,
@@ -267,6 +270,11 @@ const workspaceSlice = createSlice({
     
     setCurrentWorkspace: (state, action: PayloadAction<string | null>) => {
       state.currentWorkspaceId = action.payload;
+      if (action.payload) {
+        localStorage.setItem(STORAGE_KEY, action.payload);
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
     },
     
     setInvitations: (state, action: PayloadAction<WorkspaceInvitation[]>) => {
@@ -277,7 +285,10 @@ const workspaceSlice = createSlice({
     resetWorkspaceState: () => initialState,
 
     // Clear workspace state completely on logout
-    clearWorkspaceState: () => initialState,
+    clearWorkspaceState: () => {
+      localStorage.removeItem(STORAGE_KEY);
+      return initialState;
+    },
   },
   extraReducers: (builder) => {
     // fetchUserWorkspaces
@@ -294,9 +305,16 @@ const workspaceSlice = createSlice({
       state.workspaces.sort((a, b) => a.name.localeCompare(b.name));
       state.loading = false;
       
-      // Set first workspace as current if none selected
-      if (!state.currentWorkspaceId && uniqueWorkspaces.length > 0) {
+      // Try to restore saved workspace, validate it still exists and user has access
+      const savedId = localStorage.getItem(STORAGE_KEY);
+      if (savedId && uniqueWorkspaces.some(w => w.id === savedId)) {
+        state.currentWorkspaceId = savedId;
+      } else if (!state.currentWorkspaceId && uniqueWorkspaces.length > 0) {
+        // Only default to first workspace if no current workspace is set
         state.currentWorkspaceId = uniqueWorkspaces[0].id;
+        if (uniqueWorkspaces[0].id) {
+          localStorage.setItem(STORAGE_KEY, uniqueWorkspaces[0].id);
+        }
       }
     });
     builder.addCase(fetchUserWorkspaces.rejected, (state, action) => {
@@ -359,6 +377,12 @@ const workspaceSlice = createSlice({
       // If the deleted workspace was the current one, set to null or the first available
       if (state.currentWorkspaceId === action.payload) {
         state.currentWorkspaceId = state.workspaces.length > 0 ? state.workspaces[0].id : null;
+        // Update localStorage to match
+        if (state.currentWorkspaceId) {
+          localStorage.setItem(STORAGE_KEY, state.currentWorkspaceId);
+        } else {
+          localStorage.removeItem(STORAGE_KEY);
+        }
       }
       
       state.loading = false;

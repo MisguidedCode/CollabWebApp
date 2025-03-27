@@ -43,6 +43,14 @@ export const store = configureStore({
           'websocket/error',
           'websocket/statusChanged',
           'websocket/messageReceived',
+          // Chat-related actions that may have real-time updates
+          'chat/updateMessages',
+          'chat/sendMessage',
+          'chat/fetchMessages'
+        ],
+        // Ignore these field paths in the state
+        ignoredPaths: [
+          'chat.processedMessageIds'
         ],
         
         // Function to check if a value is serializable

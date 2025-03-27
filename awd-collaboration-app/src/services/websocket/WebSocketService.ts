@@ -21,7 +21,7 @@ export class WebSocketService {
 
   constructor(config: WebSocketConfig) {
     this.config = config;
-    this.eventEmitter = new EventEmitter();
+    this.eventEmitter = new EventEmitter(30); // Increased from default 10 to accommodate more listeners
     this.messageQueue = new MessageQueue(
       async (message) => this.sendMessage(message),
       {

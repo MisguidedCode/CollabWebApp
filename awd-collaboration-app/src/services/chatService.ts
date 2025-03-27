@@ -16,10 +16,16 @@ import {
 } from 'firebase/firestore';
 import { db, COLLECTIONS } from '../config/firebase';
 import { Chat, Message, ChatType } from '../types/chat';
+import { isValidWorkspaceMember } from '../types/workspace';
 import { createChannelChatEnhanced } from './createChannel';
 
-// Helper function to check workspace membership
+// Helper function to check workspace membership with better error handling
 const checkWorkspaceMembership = async (userId: string, workspaceId: string): Promise<boolean> => {
+  if (!userId || !workspaceId) {
+    console.error('Invalid userId or workspaceId provided');
+    return false;
+  }
+
   try {
     const workspaceDoc = doc(db, COLLECTIONS.WORKSPACES, workspaceId);
     const snapshot = await getDoc(workspaceDoc);
@@ -35,22 +41,29 @@ const checkWorkspaceMembership = async (userId: string, workspaceId: string): Pr
       return false;
     }
 
-    if (!Array.isArray(data.members)) {
-      console.log('Members field is not an array in workspace:', workspaceId);
+    // Check if members field exists and is an array
+    if (!data.members || !Array.isArray(data.members)) {
+      console.log('Invalid members field in workspace:', workspaceId);
       return false;
     }
 
+    // Validate and check user membership using type-safe validation
     const isMember = data.members.some((member: any) => {
-      if (!member || typeof member !== 'object') {
-        console.log('Invalid member entry in workspace:', workspaceId);
+      if (!isValidWorkspaceMember(member)) {
+        console.log('Invalid member entry structure:', member);
         return false;
       }
       return member.userId === userId && member.status === 'active';
     });
 
+    if (!isMember) {
+      console.log('User is not an active member of workspace:', { userId, workspaceId });
+    }
+
     return isMember;
   } catch (error) {
     console.error('Error checking workspace membership:', error);
+    console.error('Details:', { userId, workspaceId, error });
     return false;
   }
 };
@@ -339,6 +352,8 @@ export const createDirectMessageChat = async (
     type: 'direct',
     name: `${userName1}, ${userName2}`,
     participants: [userId1, userId2],
+    lastUpdated: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
     meta: {
       userNames: {
         [userId1]: userName1,
@@ -397,6 +412,82 @@ export const addUserToChat = async (chatId: string, userToAddId: string, request
 };
 
 // Remove user from chat with workspace check
+// Update message with workspace check
+export const updateMessage = async (
+  chatId: string,
+  messageId: string,
+  content: string,
+  userId: string
+): Promise<Message> => {
+  // Get the chat to check workspace access
+  const chat = await getChatById(chatId, userId);
+  if (!chat) {
+    throw new Error('Chat not found');
+  }
+
+  const messageDoc = doc(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES, messageId);
+  const snapshot = await getDoc(messageDoc);
+  
+  if (!snapshot.exists()) {
+    throw new Error('Message not found');
+  }
+  
+  const messageData = snapshot.data();
+  if (messageData.senderId !== userId) {
+    throw new Error('Unauthorized: Can only edit your own messages');
+  }
+
+  const updateData = {
+    content,
+    edited: true,
+    editedAt: serverTimestamp(),
+    editHistory: messageData.editHistory || []
+  };
+
+  // Add current content to edit history
+  updateData.editHistory.push({
+    content: messageData.content,
+    timestamp: messageData.timestamp
+  });
+
+  await updateDoc(messageDoc, updateData);
+  
+  // Get the updated message with proper timestamp conversion
+  const updatedDoc = await getDoc(messageDoc);
+  return messageConverter.fromFirestore(updatedDoc);
+};
+
+// Delete message with workspace check
+export const deleteMessage = async (
+  chatId: string,
+  messageId: string,
+  userId: string
+): Promise<void> => {
+  // Get the chat to check workspace access
+  const chat = await getChatById(chatId, userId);
+  if (!chat) {
+    throw new Error('Chat not found');
+  }
+
+  const messageDoc = doc(db, COLLECTIONS.CHATS, chatId, COLLECTIONS.MESSAGES, messageId);
+  const snapshot = await getDoc(messageDoc);
+  
+  if (!snapshot.exists()) {
+    throw new Error('Message not found');
+  }
+  
+  const messageData = snapshot.data();
+  if (messageData.senderId !== userId) {
+    throw new Error('Unauthorized: Can only delete your own messages');
+  }
+
+  await updateDoc(messageDoc, {
+    content: '[Message deleted]',
+    isDeleted: true,
+    deletedAt: serverTimestamp()
+  });
+};
+
 export const removeUserFromChat = async (chatId: string, userToRemoveId: string, requestingUserId: string): Promise<void> => {
   // Get the chat to check workspace access
   const chat = await getChatById(chatId, requestingUserId);

@@ -1,281 +1,301 @@
-import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction, createAction } from '@reduxjs/toolkit';
+import * as chatService from '../../services/chatService';
+import { Chat, Message } from '../../types/chat';
 import { RootState } from '../index';
-import { Chat, Message, ChatState } from '../../types/chat';
-import {
-  getWorkspaceChats,
-  getChatMessages,
-  sendMessage as sendMessageToFirestore,
-  createDirectMessageChat,
-  subscribeToWorkspaceChats,
-  subscribeToChatMessages,
-  createChannelChat
-} from '../../services/chatService';
-import { 
-  registerSubscription, 
-  unregisterSubscription,
-  unregisterSubscriptionsByPrefix
-} from '../../utils/subscriptionManager';
+import { unregisterSubscriptionsByPrefix } from '../../utils/subscriptionManager';
+
+interface ChatState {
+  activeChats: Chat[];
+  messages: { [chatId: string]: Message[] };
+  currentChatId: string | null;
+  loading: {
+    chatList: boolean;
+    messages: boolean;
+  };
+  error: string | null;
+  processedMessageIds: { [messageId: string]: boolean }; // Track processed messages
+  lastCleanup: number; // Track last cleanup timestamp
+}
+
+// Action to clear chats and messages when switching workspaces
+export const clearChats = createAction('chat/clearChats');
+
+export const fetchUserChats = createAsyncThunk(
+  'chat/fetchUserChats',
+  async (workspaceId: string, { getState }: any) => {
+    const userId = getState().auth.user?.uid;
+    if (!userId) throw new Error('User not authenticated');
+    return await chatService.getWorkspaceChats(workspaceId, userId);
+  }
+);
+
+// Function to unsubscribe from all chat subscriptions
+export const unsubscribeAll = createAsyncThunk(
+  'chat/unsubscribeAll',
+  async () => {
+    unregisterSubscriptionsByPrefix('chat_');
+  }
+);
 
 const initialState: ChatState = {
   activeChats: [],
   messages: {},
   currentChatId: null,
-  loading: false,
+  loading: {
+    chatList: false,
+    messages: false
+  },
   error: null,
+  processedMessageIds: {},
+  lastCleanup: Date.now()
 };
 
-// Async Thunks
-export const fetchUserChats = createAsyncThunk(
-  'chat/fetchUserChats',
-  async (_, { dispatch, getState, rejectWithValue }) => {
-    try {
-      const state = getState() as RootState;
-      const userId = state.auth.user?.uid;
-      const workspaceId = state.workspace.currentWorkspaceId;
-
-      if (!userId || !workspaceId) {
-        throw new Error('User or workspace not selected');
-      }
-
-      console.log('Fetching chats for user:', userId, 'in workspace:', workspaceId);
-      const chats = await getWorkspaceChats(workspaceId, userId);
-      console.log('Fetched chats:', chats);
-      
-      // Setup real-time subscription using the subscription manager
-      const unsubscribe = subscribeToWorkspaceChats(workspaceId, userId, (updatedChats) => {
-        console.log('Real-time chat update received:', updatedChats);
-        dispatch(setChats(updatedChats));
-      });
-      
-      // Store the unsubscribe function in our manager, not in Redux state
-      registerSubscription('chats', unsubscribe);
-      
-      return chats;
-    } catch (error) {
-      console.error('Error fetching chats:', error);
-      return rejectWithValue((error as Error).message);
-    }
+// Helper function to clean up old message IDs
+const cleanupMessageIds = (state: ChatState) => {
+  const now = Date.now();
+  // Clean up every 5 minutes
+  if (now - state.lastCleanup > 5 * 60 * 1000) {
+    state.processedMessageIds = {};
+    state.lastCleanup = now;
   }
-);
+};
 
+// Async thunks
 export const fetchChatMessages = createAsyncThunk(
-  'chat/fetchChatMessages',
-  async (chatId: string, { dispatch, getState, rejectWithValue }) => {
-    try {
-      const state = getState() as RootState;
-      const userId = state.auth.user?.uid;
-
-      if (!userId) {
-        throw new Error('User not logged in');
-      }
-
-      // Clean up any existing message subscription first
-      unregisterSubscription(`messages-${chatId}`);
-      
-      const messages = await getChatMessages(chatId, userId);
-      
-      // Setup real-time subscription for this chat's messages
-      const unsubscribePromise = await subscribeToChatMessages(chatId, userId, (updatedMessages: Message[]) => {
-        dispatch(setMessages({ chatId, messages: updatedMessages }));
-      });
-      
-      // Store the unsubscribe function in our manager, not in Redux state
-      registerSubscription(`messages-${chatId}`, unsubscribePromise);
-      
-      return { chatId, messages };
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-      return rejectWithValue((error as Error).message);
-    }
+  'chat/fetchMessages',
+  async (chatId: string, { getState }: any) => {
+    const userId = getState().auth.user?.uid;
+    if (!userId) throw new Error('User not authenticated');
+    return await chatService.getChatMessages(chatId, userId);
   }
 );
 
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
-  async ({ chatId, content }: { chatId: string; content: string }, { getState, rejectWithValue }) => {
-    try {
-      const state = getState() as RootState;
-      const userId = state.auth.user?.uid;
-
-      if (!userId) {
-        throw new Error('User not logged in');
-      }
-
-      const newMessage: Omit<Message, 'id'> = {
-        content,
-        type: 'text',
-        senderId: userId,
-        timestamp: new Date().toISOString(),
-      };
-      
-      const sentMessage = await sendMessageToFirestore(chatId, newMessage, userId);
-      return { chatId, message: sentMessage };
-    } catch (error) {
-      console.error('Error sending message:', error);
-      return rejectWithValue((error as Error).message);
-    }
+  async ({ chatId, content }: { chatId: string; content: string }, { getState }: any) => {
+    const userId = getState().auth.user?.uid;
+    if (!userId) throw new Error('User not authenticated');
+    
+    const message: Omit<Message, 'id'> = {
+      chatId,
+      content,
+      senderId: userId,
+      timestamp: new Date().toISOString(),
+      type: 'text'
+    };
+    
+    return await chatService.sendMessage(chatId, message, userId);
   }
 );
 
-export const createChannel = createAsyncThunk(
-  'chat/createChannel',
-  async ({ name, description }: { name: string; description: string }, { getState, rejectWithValue }) => {
-    try {
-      const state = getState() as RootState;
-      const userId = state.auth.user?.uid;
-      const workspaceId = state.workspace.currentWorkspaceId;
-
-      if (!userId || !workspaceId) {
-        throw new Error('User or workspace not selected');
-      }
-
-      console.log('Creating channel:', { name, description, creatorId: userId, workspaceId });
-      return await createChannelChat(workspaceId, name, description, userId);
-    } catch (error) {
-      console.error('Error creating channel:', error);
-      return rejectWithValue((error as Error).message);
-    }
+export const updateMessage = createAsyncThunk(
+  'chat/updateMessage',
+  async (
+    { chatId, messageId, content }: { chatId: string; messageId: string; content: string },
+    { getState }: any
+  ) => {
+    const userId = getState().auth.user?.uid;
+    if (!userId) throw new Error('User not authenticated');
+    
+    return await chatService.updateMessage(chatId, messageId, content, userId);
   }
 );
 
-export const createDirectMessage = createAsyncThunk(
-  'chat/createDirectMessage',
-  async ({ 
-    userId2, 
-    userName1, 
-    userName2 
-  }: { 
-    userId2: string; 
-    userName1: string; 
-    userName2: string 
-  }, { getState, rejectWithValue }) => {
-    try {
-      const state = getState() as RootState;
-      const userId1 = state.auth.user?.uid;
-      const workspaceId = state.workspace.currentWorkspaceId;
-
-      if (!userId1 || !workspaceId) {
-        throw new Error('User or workspace not selected');
-      }
-
-      return await createDirectMessageChat(workspaceId, userId1, userId2, userName1, userName2);
-    } catch (error) {
-      console.error('Error creating direct message:', error);
-      return rejectWithValue((error as Error).message);
-    }
+export const deleteMessage = createAsyncThunk(
+  'chat/deleteMessage',
+  async (
+    { chatId, messageId }: { chatId: string; messageId: string },
+    { getState }: any
+  ) => {
+    const userId = getState().auth.user?.uid;
+    if (!userId) throw new Error('User not authenticated');
+    
+    await chatService.deleteMessage(chatId, messageId, userId);
+    return { chatId, messageId };
   }
 );
-
-// Function to unsubscribe from all chat subscriptions - call this on cleanup
-export const unsubscribeAll = () => {
-  unregisterSubscriptionsByPrefix('chats');
-  unregisterSubscriptionsByPrefix('messages-');
-};
 
 const chatSlice = createSlice({
   name: 'chat',
   initialState,
   reducers: {
-    setCurrentChat: (state, action: PayloadAction<string>) => {
+    setCurrentChat: (state, action: PayloadAction<string | null>) => {
       state.currentChatId = action.payload;
     },
-    
-    setChats: (state, action: PayloadAction<Chat[]>) => {
+    addChat: (state, action: PayloadAction<Chat>) => {
+      if (!state.activeChats.find(chat => chat.id === action.payload.id)) {
+        state.activeChats.push(action.payload);
+      }
+    },
+    updateChats: (state, action: PayloadAction<Chat[]>) => {
       state.activeChats = action.payload;
     },
-    
-    setMessages: (state, action: PayloadAction<{ chatId: string; messages: Message[] }>) => {
-      const { chatId, messages } = action.payload;
-      state.messages[chatId] = messages;
+    clearError: (state) => {
+      state.error = null;
     },
-    
-    resetChatState: () => initialState,
+    // Add updateMessages reducer with deduplication
+    updateMessages: (state, action: PayloadAction<{ chatId: string; messages: Message[] }>) => {
+      const { chatId, messages } = action.payload;
+      const currentMessages = state.messages[chatId] || [];
+      
+      // Filter out duplicates and add only new messages
+      const newMessages = messages.filter(message => 
+        message.id && !state.processedMessageIds[message.id]
+      );
+      
+      // Add new messages to processed set
+      newMessages.forEach(message => {
+        if (message.id) {
+          state.processedMessageIds[message.id] = true;
+        }
+      });
+      
+      // Clean up processed message IDs periodically
+      cleanupMessageIds(state);
+      
+      // Update messages, preserving existing ones
+      state.messages[chatId] = [...currentMessages, ...newMessages];
+    }
   },
   extraReducers: (builder) => {
-    // fetchUserChats
+    // Handle clear chats
+    builder.addCase(clearChats, (state) => {
+      state.activeChats = [];
+      state.messages = {};
+      state.currentChatId = null;
+      state.error = null;
+      state.processedMessageIds = {};
+      state.lastCleanup = Date.now();
+    });
+
+    // Fetch user chats
     builder.addCase(fetchUserChats.pending, (state) => {
-      state.loading = true;
+      state.loading.chatList = true;
       state.error = null;
     });
     builder.addCase(fetchUserChats.fulfilled, (state, action) => {
+      state.loading.chatList = false;
       state.activeChats = action.payload;
-      state.loading = false;
     });
     builder.addCase(fetchUserChats.rejected, (state, action) => {
-      state.loading = false;
-      state.error = action.payload as string;
-      console.error('fetchUserChats rejected with error:', action.payload);
+      state.loading.chatList = false;
+      state.error = action.error.message ?? 'Failed to fetch chats';
     });
-    
-    // fetchChatMessages
+
+    // Fetch messages
     builder.addCase(fetchChatMessages.pending, (state) => {
-      state.loading = true;
+      state.loading.messages = true;
       state.error = null;
     });
     builder.addCase(fetchChatMessages.fulfilled, (state, action) => {
-      const { chatId, messages } = action.payload;
-      state.messages[chatId] = messages;
-      state.loading = false;
+      state.loading.messages = false;
+      if (state.currentChatId) {
+        state.messages[state.currentChatId] = action.payload;
+      }
     });
     builder.addCase(fetchChatMessages.rejected, (state, action) => {
-      state.loading = false;
-      state.error = action.payload as string;
+      state.loading.messages = false;
+      state.error = action.error.message ?? 'Failed to fetch messages';
     });
-    
-    // sendMessage
+
+    // Send message with deduplication
+    builder.addCase(sendMessage.pending, (state) => {
+      state.error = null;
+    });
+    builder.addCase(sendMessage.fulfilled, (state, action) => {
+      const message = action.payload;
+      if (!message.id || state.processedMessageIds[message.id]) {
+        return; // Skip if message is already processed
+      }
+      
+      if (!state.messages[message.chatId]) {
+        state.messages[message.chatId] = [];
+      }
+      
+      // Add to processed messages and cleanup if needed
+      state.processedMessageIds[message.id] = true;
+      cleanupMessageIds(state);
+      
+      state.messages[message.chatId].push(message);
+    });
     builder.addCase(sendMessage.rejected, (state, action) => {
-      state.error = action.payload as string;
+      state.error = action.error.message ?? 'Failed to send message';
     });
-    
-    // createChannel
-    builder.addCase(createChannel.pending, (state) => {
-      state.loading = true;
-      state.error = null;
-      console.log('createChannel.pending action dispatched');
-    });
-    builder.addCase(createChannel.fulfilled, (state, action) => {
-      state.loading = false;
-      console.log('createChannel.fulfilled with payload:', action.payload);
-      // Manually add the new channel to activeChats for immediate feedback
-      // It will be overwritten by the subscription, but this gives immediate UI update
-      if (!state.activeChats.some(chat => chat.id === action.payload.id)) {
-        state.activeChats = [...state.activeChats, action.payload];
-      }
-    });
-    builder.addCase(createChannel.rejected, (state, action) => {
-      state.loading = false;
-      state.error = action.payload as string;
-      console.error('createChannel.rejected with error:', action.payload);
-    });
-    
-    // createDirectMessage
-    builder.addCase(createDirectMessage.pending, (state) => {
-      state.loading = true;
+
+    // Update message
+    builder.addCase(updateMessage.pending, (state) => {
       state.error = null;
     });
-    builder.addCase(createDirectMessage.fulfilled, (state, action) => {
-      state.loading = false;
-      // Manually add the new DM to activeChats
-      if (!state.activeChats.some(chat => chat.id === action.payload.id)) {
-        state.activeChats = [...state.activeChats, action.payload];
+    builder.addCase(updateMessage.fulfilled, (state, action) => {
+      const updatedMessage = action.payload;
+      if (!state.messages[updatedMessage.chatId]) {
+        state.messages[updatedMessage.chatId] = [];
+      }
+      
+      const chatMessages = state.messages[updatedMessage.chatId];
+      const index = chatMessages?.findIndex(msg => msg?.id === updatedMessage?.id) ?? -1;
+      if (index !== -1) {
+        chatMessages[index] = updatedMessage;
       }
     });
-    builder.addCase(createDirectMessage.rejected, (state, action) => {
-      state.loading = false;
-      state.error = action.payload as string;
+    builder.addCase(updateMessage.rejected, (state, action) => {
+      state.error = action.error.message ?? 'Failed to update message';
+    });
+
+    // Delete message
+    builder.addCase(deleteMessage.pending, (state) => {
+      state.error = null;
+    });
+    builder.addCase(deleteMessage.fulfilled, (state, action) => {
+      const { chatId, messageId } = action.payload;
+      if (!state.messages[chatId]) {
+        state.messages[chatId] = [];
+        return;
+      }
+      
+      const chatMessages = state.messages[chatId];
+      const index = chatMessages?.findIndex(msg => msg?.id === messageId) ?? -1;
+      if (index !== -1 && chatMessages?.[index]) {
+        chatMessages[index] = {
+          ...chatMessages[index],
+          content: '[Message deleted]',
+          isDeleted: true,
+          deletedAt: new Date().toISOString()
+        };
+      }
+    });
+    builder.addCase(deleteMessage.rejected, (state, action) => {
+      state.error = action.error.message ?? 'Failed to delete message';
     });
   }
 });
 
-export const {
-  setCurrentChat,
-  setChats,
-  setMessages,
-  resetChatState
+// Create a new channel
+export const createChannel = createAsyncThunk(
+  'chat/createChannel',
+  async (
+    { name, description, creatorId }: 
+    { name: string; description: string; creatorId: string },
+    { getState }
+  ) => {
+    const state = getState() as RootState;
+    const workspaceId = state.workspace.currentWorkspaceId;
+    if (!workspaceId) throw new Error('No workspace selected');
+    
+    return await chatService.createChannelChat(
+      workspaceId,
+      name,
+      description,
+      creatorId
+    );
+  }
+);
+
+export const { 
+  setCurrentChat, 
+  addChat, 
+  updateChats, 
+  clearError, 
+  updateMessages
 } = chatSlice.actions;
-
-// For backwards compatibility with existing code
-export const addChat = createChannel;
-export const addMessage = sendMessage;
-
 export default chatSlice.reducer;

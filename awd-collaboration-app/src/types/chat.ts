@@ -1,34 +1,40 @@
-export type MessageType = 'text' | 'file';
-export type ChatType = 'channel' | 'direct';
+export interface EditHistory {
+  content: string;
+  timestamp: string;
+}
+
+export type MessageType = 'text' | 'file' | 'system';
 
 export interface Message {
   id: string;
+  chatId: string;
   content: string;
-  type: MessageType;
   senderId: string;
   timestamp: string;
-  fileUrl?: string;
-  fileName?: string;
+  type: MessageType;
+  edited?: boolean;
+  editedAt?: string;
+  editHistory?: EditHistory[];
+  isDeleted?: boolean;
+  deletedAt?: string;
 }
+
+export type ChatType = 'direct' | 'channel';
 
 export interface Chat {
   id: string;
-  workspaceId: string; // Workspace this chat belongs to
+  workspaceId: string;
   type: ChatType;
-  name: string; // Channel name or user name for direct messages
+  name: string;
   description?: string;
-  participants: string[]; // User IDs
-  lastMessage?: Partial<Message>;
-  unreadCount?: number;
-  createdAt?: string;
-  lastUpdated?: string;
-  meta?: Record<string, any>; // For storing additional metadata like user details for DMs
-}
-
-export interface ChatState {
-  activeChats: Chat[];
-  messages: Record<string, Message[]>; // Keyed by chat ID
-  currentChatId: string | null;
-  loading: boolean;
-  error: string | null;
+  participants: string[];
+  lastMessage?: {
+    content: string;
+    senderId: string;
+    timestamp: string;
+    type: MessageType;
+  };
+  lastUpdated: string;
+  createdAt: string;
+  meta?: Record<string, any>;
 }

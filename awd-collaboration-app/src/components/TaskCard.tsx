@@ -1,6 +1,6 @@
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 import { Task } from '../types/task';
 import { getFileTypeInfo } from '../utils/fileUtils';
 
@@ -59,7 +59,7 @@ const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
       </div>
 
       {/* Task content */}
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-start mb-2">
         <h3 className="text-sm font-medium text-gray-900">{task.title}</h3>
         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
           task.priority === 'high' 
@@ -71,7 +71,25 @@ const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
           {task.priority}
         </span>
       </div>
-      <p className="mt-1 text-sm text-gray-600 line-clamp-2">{task.description}</p>
+      {/* Assignee section */}
+      {(task.assignee || task.assignedTo) && (
+        <div className="flex items-center mt-2 mb-2">
+          {task.assignee?.photoURL ? (
+            <img
+              src={task.assignee.photoURL}
+              alt={task.assignee.displayName || task.assignee.email}
+              className="h-5 w-5 rounded-full mr-2"
+            />
+          ) : (
+            <UserCircleIcon className="h-5 w-5 text-gray-400 mr-2" />
+          )}
+          <span className="text-xs text-gray-600">
+            {task.assignee?.displayName || 'Assigned'}
+          </span>
+        </div>
+      )}
+
+      <p className="text-sm text-gray-600 line-clamp-2">{task.description}</p>
       
       {task.dueDate && (
         <div className="mt-2 text-xs text-gray-500">

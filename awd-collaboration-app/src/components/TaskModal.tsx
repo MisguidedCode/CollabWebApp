@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { createTaskThunk, updateTaskThunk } from '../store/slices/taskSlice';
-import { Task, TaskPriority, TaskStatus } from '../types/task';
+import { Task, TaskPriority, TaskStatus, TaskAssignee } from '../types/task';
+import MemberSelector from './workspace/MemberSelector';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import FileUpload from './attachments/FileUpload';
 import AttachmentList from './attachments/AttachmentList';
@@ -18,7 +19,9 @@ const TaskModal = ({ isOpen, onClose, editTask }: TaskModalProps) => {
 const dispatch = useAppDispatch();
 const user = useSelector((state: RootState) => state.auth.user);
 const workspaceId = useSelector((state: RootState) => state.workspace.currentWorkspaceId);
+const { workspaces } = useSelector((state: RootState) => state.workspace);
   
+  const [assignee, setAssignee] = useState<TaskAssignee | undefined>();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -37,6 +40,23 @@ const workspaceId = useSelector((state: RootState) => state.workspace.currentWor
   useEffect(() => {
     if (editTask) {
       console.log("Initial task load:", editTask);
+      
+      // Set assignee if task has one
+      if (editTask.assignee) {
+        setAssignee(editTask.assignee);
+      } else if (editTask.assignedTo) {
+        // Handle legacy assignedTo field
+        const workspace = workspaces.find((w) => w.id === workspaceId);
+        const member = workspace?.members.find((m) => m.userId === editTask.assignedTo);
+        if (member) {
+          setAssignee({
+            userId: member.userId,
+            displayName: member.displayName,
+            photoURL: member.photoURL,
+            email: member.email
+          });
+        }
+      }
       
       setFormData({
         title: editTask.title,
@@ -118,7 +138,8 @@ const workspaceId = useSelector((state: RootState) => state.workspace.currentWor
         dueDate: formData.dueDate || undefined,
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
         attachments: attachments, // Use our managed local state
-        assignedTo: editTask?.assignedTo || user.uid,
+        assignedTo: assignee?.userId || editTask?.assignedTo,
+        assignee: assignee,
       };
 
       if (editTask) {
@@ -195,6 +216,18 @@ const workspaceId = useSelector((state: RootState) => state.workspace.currentWor
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Assign To
+                </label>
+                <div className="mt-1">
+                  <MemberSelector
+                    value={assignee}
+                    onChange={setAssignee}
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

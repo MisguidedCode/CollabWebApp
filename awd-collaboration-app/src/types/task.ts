@@ -2,6 +2,13 @@ export type TaskPriority = 'low' | 'medium' | 'high';
 export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
 import { TaskAttachment } from './attachment';
 
+export interface TaskAssignee {
+  userId: string;
+  displayName?: string | null;
+  photoURL?: string | null;
+  email: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -9,6 +16,7 @@ export interface Task {
   status: TaskStatus;
   priority: TaskPriority;
   assignedTo?: string;
+  assignee?: TaskAssignee;
   createdBy: string;
   createdAt: string;
   dueDate?: string;

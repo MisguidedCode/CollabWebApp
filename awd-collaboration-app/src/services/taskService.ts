@@ -71,12 +71,25 @@ const taskConverter = {
   },
   toFirestore: (task: Task) => {
     const { id, ...taskData } = task;
-    return {
+    
+    // Clean up assignee data to prevent undefined values
+    const cleanedData = {
       ...taskData,
       createdAt: task.createdAt ? Timestamp.fromDate(new Date(task.createdAt)) : serverTimestamp(),
       dueDate: task.dueDate ? Timestamp.fromDate(new Date(task.dueDate)) : null,
       updatedAt: serverTimestamp(),
     };
+
+    // If assignee exists, ensure its optional fields are null instead of undefined
+    if (cleanedData.assignee) {
+      cleanedData.assignee = {
+        ...cleanedData.assignee,
+        displayName: cleanedData.assignee.displayName ?? null,
+        photoURL: cleanedData.assignee.photoURL ?? null
+      };
+    }
+
+    return cleanedData;
   }
 };
 

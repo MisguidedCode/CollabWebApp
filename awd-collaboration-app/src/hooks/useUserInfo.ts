@@ -1,14 +1,18 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import { RootState, useAppDispatch } from '../store';
 import { fetchUserInfo } from '../store/slices/chatSlice';
 
 export function useUserInfo(userId: string) {
   const dispatch = useAppDispatch();
-  const { userCache, loading } = useSelector((state: RootState) => ({
-    userCache: state.chat.userCache,
-    loading: state.chat.loading.userInfo
-  }));
+  const userCache = useSelector((state: RootState) => state.chat.userCache);
+  const loading = useSelector((state: RootState) => state.chat.loading.userInfo);
+  
+  const userData = useMemo(() => ({
+    displayName: userCache[userId]?.displayName ?? 'Unknown User',
+    photoURL: userCache[userId]?.photoURL ?? null,
+    loading
+  }), [userId, userCache, loading]);
 
   useEffect(() => {
     if (!userId) return;
@@ -22,9 +26,5 @@ export function useUserInfo(userId: string) {
     }
   }, [userId, userCache, dispatch]);
 
-  return {
-    displayName: userCache[userId]?.displayName ?? 'Unknown User',
-    photoURL: userCache[userId]?.photoURL ?? null,
-    loading
-  };
+  return userData;
 }

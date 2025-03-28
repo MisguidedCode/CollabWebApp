@@ -282,6 +282,30 @@ export const deleteChannel = createAsyncThunk(
   }
 );
 
+// Create a direct message chat
+export const createDirectMessage = createAsyncThunk(
+  'chat/createDirectMessage',
+  async (
+    { targetUserId, targetUserName }: { targetUserId: string; targetUserName: string },
+    { getState }
+  ) => {
+    const state = getState() as RootState;
+    const workspaceId = state.workspace.currentWorkspaceId;
+    const currentUser = state.auth.user;
+    
+    if (!workspaceId) throw new Error('No workspace selected');
+    if (!currentUser) throw new Error('User not authenticated');
+    
+    return await chatService.createDirectMessageChat(
+      workspaceId,
+      currentUser.uid,
+      targetUserId,
+      currentUser.displayName || currentUser.email || 'Unknown User',
+      targetUserName
+    );
+  }
+);
+
 // Create a new channel
 export const createChannel = createAsyncThunk(
   'chat/createChannel',

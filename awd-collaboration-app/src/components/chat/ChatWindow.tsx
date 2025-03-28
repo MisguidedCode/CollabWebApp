@@ -13,7 +13,7 @@ import {
 } from '../../store/slices/chatSlice';
 import { registerSubscription, unregisterSubscription } from '../../utils/subscriptionManager';
 import * as chatService from '../../services/chatService';
-import { PencilIcon, TrashIcon, XMarkIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon, XMarkIcon, CheckIcon, UserCircleIcon } from '@heroicons/react/24/outline';
 
 interface ChatMessageProps {
   message: Message;
@@ -232,11 +232,29 @@ const ChatWindow = () => {
     <div className="h-full flex flex-col">
       {/* Chat Header */}
       <div className="flex-shrink-0 p-4 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-800">
-          {currentChat.type === 'channel' ? '#' : ''}{currentChat.name}
-        </h2>
-        {currentChat.description && (
-          <p className="text-sm text-gray-500">{currentChat.description}</p>
+        {currentChat.type === 'channel' ? (
+          <>
+            <h2 className="text-lg font-semibold text-gray-800">
+              #{currentChat.name}
+            </h2>
+            {currentChat.description && (
+              <p className="text-sm text-gray-500">{currentChat.description}</p>
+            )}
+          </>
+        ) : (
+          <div className="flex items-center">
+            <div className="flex-1">
+              <h2 className="text-lg font-semibold text-gray-800 flex items-center">
+                <UserCircleIcon className="h-5 w-5 mr-2 text-gray-400" />
+                {currentChat.name}
+              </h2>
+              {currentChat.meta?.lastSeen && (
+                <p className="text-sm text-gray-500">
+                  Last seen {new Date(currentChat.meta.lastSeen).toLocaleString()}
+                </p>
+              )}
+            </div>
+          </div>
         )}
       </div>
 

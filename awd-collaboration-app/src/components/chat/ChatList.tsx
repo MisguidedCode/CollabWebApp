@@ -4,8 +4,16 @@ import { RootState, useAppDispatch } from '../../store';
 import { setCurrentChat, fetchUserChats, updateChats, deleteChannel } from '../../store/slices/chatSlice';
 import * as chatService from '../../services/chatService';
 import { Chat } from '../../types/chat';
-import { HashtagIcon, UserCircleIcon, PlusIcon, ArrowPathIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { 
+  HashtagIcon, 
+  UserCircleIcon, 
+  PlusIcon, 
+  ArrowPathIcon, 
+  TrashIcon,
+  ChatBubbleLeftRightIcon 
+} from '@heroicons/react/24/outline';
 import CreateChannelForm from './CreateChannelForm';
+import DirectMessageModal from './DirectMessageModal';
 
 const ChatList = () => {
   // Use the typed dispatch
@@ -14,6 +22,7 @@ const ChatList = () => {
   const { currentWorkspaceId } = useSelector((state: RootState) => state.workspace);
   const user = useSelector((state: RootState) => state.auth.user);
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
+  const [isCreatingDM, setIsCreatingDM] = useState(false);
   const [channelToDelete, setChannelToDelete] = useState<string | null>(null);
 
   // Subscribe to workspace chats
@@ -74,20 +83,29 @@ const ChatList = () => {
       <div className="p-4 border-b border-gray-200 flex justify-between items-center">
         <h2 className="text-lg font-semibold text-gray-800">Chat</h2>
         <div className="flex space-x-2">
-          <button
-            onClick={handleRefreshChats}
-            className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
-            title="Refresh chats"
-          >
-            <ArrowPathIcon className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => setIsCreatingChannel(!isCreatingChannel)}
-            className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
-            title="Create new channel"
-          >
-            <PlusIcon className="h-5 w-5" />
-          </button>
+          <div className="flex space-x-2">
+            <button
+              onClick={handleRefreshChats}
+              className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+              title="Refresh chats"
+            >
+              <ArrowPathIcon className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => setIsCreatingDM(true)}
+              className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+              title="New direct message"
+            >
+              <ChatBubbleLeftRightIcon className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => setIsCreatingChannel(!isCreatingChannel)}
+              className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+              title="Create new channel"
+            >
+              <PlusIcon className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </div>
       
@@ -104,6 +122,14 @@ const ChatList = () => {
         <CreateChannelForm
           onClose={() => setIsCreatingChannel(false)}
           onSuccess={(channelId) => dispatch(setCurrentChat(channelId))}
+        />
+      )}
+
+      {/* Direct Message Modal */}
+      {isCreatingDM && (
+        <DirectMessageModal
+          onClose={() => setIsCreatingDM(false)}
+          onSuccess={(chatId) => dispatch(setCurrentChat(chatId))}
         />
       )}
 

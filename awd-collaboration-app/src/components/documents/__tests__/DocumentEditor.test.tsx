@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import DocumentEditor from '../DocumentEditor';
@@ -20,6 +20,22 @@ jest.mock('../../../config/firebase', () => ({
   }
 }));
 
+// Mock Yjs Doc
+const mockYDoc = {
+  destroy: jest.fn(),
+  getXmlFragment: jest.fn().mockReturnValue({
+    toArray: jest.fn().mockReturnValue([]),
+  })
+};
+
+// Mock Yjs and related modules
+jest.mock('yjs', () => ({
+  Doc: jest.fn().mockImplementation(() => mockYDoc)
+}));
+
+// Mock window.confirm
+window.confirm = jest.fn().mockImplementation(() => true);
+
 // Mock WebSocket Provider
 jest.mock('y-websocket', () => ({
   WebsocketProvider: jest.fn().mockImplementation(() => ({
@@ -31,6 +47,25 @@ jest.mock('y-websocket', () => ({
       getStates: jest.fn().mockReturnValue(new Map()),
     },
   })),
+}));
+
+// Mock TipTap Collaboration Extensions
+jest.mock('@tiptap/extension-collaboration', () => ({
+  __esModule: true,
+  default: {
+    configure: jest.fn().mockReturnValue({
+      name: 'collaboration',
+    }),
+  },
+}));
+
+jest.mock('@tiptap/extension-collaboration-cursor', () => ({
+  __esModule: true,
+  default: {
+    configure: jest.fn().mockReturnValue({
+      name: 'collaboration-cursor',
+    }),
+  },
 }));
 
 // Create properly typed mock functions
@@ -146,27 +181,23 @@ describe('DocumentEditor', () => {
       });
 
       const store = createMockStore();
-      
-      // Mock window.confirm
-      const mockConfirm = jest.spyOn(window, 'confirm');
-      mockConfirm.mockImplementation(() => true);
 
-      render(
-        <Provider store={store}>
-          <DocumentEditor documentId={mockDocument.id} />
-        </Provider>
-      );
+      await act(async () => {
+        render(
+          <Provider store={store}>
+            <DocumentEditor documentId={mockDocument.id} />
+          </Provider>
+        );
+      });
 
       // Verify draft detection
       expect(mockGetDraft).toHaveBeenCalledWith(mockDocument.id);
-      expect(mockConfirm).toHaveBeenCalled();
+      expect(window.confirm).toHaveBeenCalled();
       
       // After confirming, draft should be removed
       await waitFor(() => {
         expect(mockRemoveDraft).toHaveBeenCalledWith(mockDocument.id);
       });
-
-      mockConfirm.mockRestore();
     });
 
     it('should save drafts periodically while editing', async () => {
@@ -175,14 +206,18 @@ describe('DocumentEditor', () => {
       // Mock timer
       jest.useFakeTimers();
 
-      render(
-        <Provider store={store}>
-          <DocumentEditor documentId={mockDocument.id} />
-        </Provider>
-      );
+      await act(async () => {
+        render(
+          <Provider store={store}>
+            <DocumentEditor documentId={mockDocument.id} />
+          </Provider>
+        );
+      });
 
       // Fast-forward 30 seconds
-      jest.advanceTimersByTime(30000);
+      await act(async () => {
+        jest.advanceTimersByTime(30000);
+      });
 
       // Check if draft was saved
       expect(mockSaveDraft).toHaveBeenCalled();
@@ -192,20 +227,22 @@ describe('DocumentEditor', () => {
   });
 
   describe('Collaboration Features', () => {
-    it('should initialize WebSocket connection for collaboration', () => {
+    it('should initialize WebSocket connection for collaboration', async () => {
       const store = createMockStore();
       
-      render(
-        <Provider store={store}>
-          <DocumentEditor documentId={mockDocument.id} />
-        </Provider>
-      );
+      await act(async () => {
+        render(
+          <Provider store={store}>
+            <DocumentEditor documentId={mockDocument.id} />
+          </Provider>
+        );
+      });
 
       // Verify WebSocket connection was initialized
       expect(WebsocketProvider).toHaveBeenCalledWith(
         'ws://localhost:4444',
         `document-${mockDocument.id}`,
-        expect.any(Y.Doc)
+        mockYDoc
       );
     });
 
@@ -214,7 +251,7 @@ describe('DocumentEditor', () => {
       (WebsocketProvider as jest.Mock).mockImplementation(() => ({
         on: (event: string, callback: (data: any) => void) => {
           if (event === 'status') {
-            callback({ status: 'connected' });
+            setTimeout(() => callback({ status: 'connected' }), 0);
           }
         },
         disconnect: jest.fn(),
@@ -227,14 +264,20 @@ describe('DocumentEditor', () => {
 
       const store = createMockStore();
       
-      render(
-        <Provider store={store}>
-          <DocumentEditor documentId={mockDocument.id} />
-        </Provider>
-      );
+      await act(async () => {
+        render(
+          <Provider store={store}>
+            <DocumentEditor documentId={mockDocument.id} />
+          </Provider>
+        );
+      });
 
       // Check for connected status
-      expect(await screen.findByText('Connected')).toBeInTheDocument();
+      await act(async () => {
+        await screen.findByText('Connected');
+      });
+
+      expect(screen.getByText('Connected')).toBeInTheDocument();
     });
   });
 });

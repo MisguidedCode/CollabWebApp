@@ -41,6 +41,7 @@ const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
             e.stopPropagation();
             onEdit(task);
           }}
+          aria-label="Edit task"
           className="p-1 text-gray-400 hover:text-blue-500 rounded-full hover:bg-gray-100"
         >
           <PencilIcon className="h-4 w-4" />
@@ -50,6 +51,7 @@ const TaskCard = ({ task, onEdit, onDelete }: TaskCardProps) => {
             e.stopPropagation();
             onDelete(task.id);
           }}
+          aria-label="Delete task"
           className="p-1 text-gray-400 hover:text-red-500 rounded-full hover:bg-gray-100"
         >
           <TrashIcon className="h-4 w-4" />

@@ -182,21 +182,18 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
       StarterKit.configure({
         history: false, // Disable history as we're using the Collaboration extension
       }),
-      // Only add Collaboration if Y.js document is initialized
-      ...(fragmentRef.current ? [
-        Collaboration.configure({
-          document: ydocRef.current,
-        }),
-        ...(providerRef.current ? [
-          CollaborationCursor.configure({
-            provider: providerRef.current,
-            user: user ? {
-              name: user.displayName || user.email || 'Anonymous',
-              color: getRandomColor(),
-            } : undefined,
-          })
-        ] : [])
-      ] : []),
+      // Add Collaboration extension with null checks
+      Collaboration.configure({
+        document: ydocRef.current || new Y.Doc(),
+        fragment: fragmentRef.current || undefined,
+      }),
+      CollaborationCursor.configure({
+        provider: providerRef.current || undefined,
+        user: user ? {
+          name: user.displayName || user.email || 'Anonymous',
+          color: getRandomColor(),
+        } : undefined,
+      }),
     ],
     editable: !readOnly,
     content: '',
@@ -204,7 +201,16 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
       // Set unsaved changes flag when content changes
       setHasUnsavedChanges(true);
     }
-  }, [fragmentRef.current, providerRef.current, user, readOnly]);
+  }, [user, readOnly]);
+
+  // Update collaboration settings when provider changes
+  useEffect(() => {
+    if (editor && providerRef.current) {
+      editor.extensionManager.extensions
+        .find(ext => ext.name === 'collaboration-cursor')
+        ?.configure({ provider: providerRef.current });
+    }
+  }, [editor, providerRef.current]);
 
   // Handle unsaved changes warning
   useEffect(() => {

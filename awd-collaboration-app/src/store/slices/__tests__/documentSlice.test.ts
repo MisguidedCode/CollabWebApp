@@ -63,9 +63,81 @@ describe('Document Slice', () => {
       reducer: {
         documents: documentReducer,
       },
+    });
   });
 
-  describe('Delete Document', () => {
+  describe('Reducers', () => {
+    it('should set documents', () => {
+      store.dispatch(setDocuments([mockDocument]));
+      const documents = store.getState().documents;
+      expect(documents.documents).toEqual([mockDocument]);
+    });
+
+    it('should set current document', () => {
+      store.dispatch(setCurrentDocument(mockDocument));
+      const documents = store.getState().documents;
+      expect(documents.currentDocument).toEqual(mockDocument);
+    });
+
+    it('should update current document', () => {
+      store.dispatch(setCurrentDocument(mockDocument));
+      const updatedDocument = {
+        ...mockDocument,
+        title: 'Updated Title',
+      };
+      store.dispatch(updateCurrentDocument(updatedDocument));
+      const documents = store.getState().documents;
+      expect(documents.currentDocument).toEqual(updatedDocument);
+    });
+
+    it('should set document comments', () => {
+      store.dispatch(setCurrentDocument(mockDocument));
+      store.dispatch(setDocumentComments({
+        documentId: mockDocument.id,
+        comments: [mockComment],
+      }));
+      const documents = store.getState().documents;
+      expect(documents.currentDocument?.comments).toEqual([mockComment]);
+    });
+
+    it('should star document', () => {
+      store.dispatch(setDocuments([mockDocument]));
+      store.dispatch(starDocument(mockDocument.id));
+      const documents = store.getState().documents;
+      expect(documents.documents[0].starred).toBe(true);
+      expect(documents.starredDocuments).toContainEqual({
+        ...mockDocument,
+        starred: true,
+      });
+    });
+
+    it('should unstar document', () => {
+      const starredDoc = { ...mockDocument, starred: true };
+      store.dispatch(setDocuments([starredDoc]));
+      store.dispatch(setCurrentDocument(starredDoc));
+      store.dispatch(unstarDocument(mockDocument.id));
+      const documents = store.getState().documents;
+      expect(documents.documents[0].starred).toBe(false);
+      expect(documents.starredDocuments).not.toContainEqual(starredDoc);
+    });
+
+    it('should reset document state', () => {
+      store.dispatch(setDocuments([mockDocument]));
+      store.dispatch(setCurrentDocument(mockDocument));
+      store.dispatch(resetDocumentState());
+      const documents = store.getState().documents;
+      expect(documents).toEqual({
+        documents: [],
+        currentDocument: null,
+        recentDocuments: [],
+        starredDocuments: [],
+        loading: false,
+        error: null,
+      });
+    });
+  });
+
+  describe('Document Operations', () => {
     it('should handle document deletion success', async () => {
       // Setup initial state with a document
       store.dispatch(setDocuments([mockDocument]));
@@ -139,78 +211,6 @@ describe('Document Slice', () => {
       expect(state.documents).not.toContainEqual(mockDocument);
       expect(state.loading).toBe(false);
       expect(state.error).toBeNull();
-    });
-  });
-});
-
-  describe('Reducers', () => {
-    it('should set documents', () => {
-      store.dispatch(setDocuments([mockDocument]));
-      const documents = store.getState().documents;
-      expect(documents.documents).toEqual([mockDocument]);
-    });
-
-    it('should set current document', () => {
-      store.dispatch(setCurrentDocument(mockDocument));
-      const documents = store.getState().documents;
-      expect(documents.currentDocument).toEqual(mockDocument);
-    });
-
-    it('should update current document', () => {
-      store.dispatch(setCurrentDocument(mockDocument));
-      const updatedDocument = {
-        ...mockDocument,
-        title: 'Updated Title',
-      };
-      store.dispatch(updateCurrentDocument(updatedDocument));
-      const documents = store.getState().documents;
-      expect(documents.currentDocument).toEqual(updatedDocument);
-    });
-
-    it('should set document comments', () => {
-      store.dispatch(setCurrentDocument(mockDocument));
-      store.dispatch(setDocumentComments({
-        documentId: mockDocument.id,
-        comments: [mockComment],
-      }));
-      const documents = store.getState().documents;
-      expect(documents.currentDocument?.comments).toEqual([mockComment]);
-    });
-
-    it('should star document', () => {
-      store.dispatch(setDocuments([mockDocument]));
-      store.dispatch(starDocument(mockDocument.id));
-      const documents = store.getState().documents;
-      expect(documents.documents[0].starred).toBe(true);
-      expect(documents.starredDocuments).toContainEqual({
-        ...mockDocument,
-        starred: true,
-      });
-    });
-
-    it('should unstar document', () => {
-      const starredDoc = { ...mockDocument, starred: true };
-      store.dispatch(setDocuments([starredDoc]));
-      store.dispatch(setCurrentDocument(starredDoc));
-      store.dispatch(unstarDocument(mockDocument.id));
-      const documents = store.getState().documents;
-      expect(documents.documents[0].starred).toBe(false);
-      expect(documents.starredDocuments).not.toContainEqual(starredDoc);
-    });
-
-    it('should reset document state', () => {
-      store.dispatch(setDocuments([mockDocument]));
-      store.dispatch(setCurrentDocument(mockDocument));
-      store.dispatch(resetDocumentState());
-      const documents = store.getState().documents;
-      expect(documents).toEqual({
-        documents: [],
-        currentDocument: null,
-        recentDocuments: [],
-        starredDocuments: [],
-        loading: false,
-        error: null,
-      });
     });
   });
 

@@ -1,8 +1,17 @@
 import { createSlice, createAsyncThunk, PayloadAction, createAction } from '@reduxjs/toolkit';
 import * as chatService from '../../services/chatService';
+import * as userService from '../../services/userService';
 import { Chat, Message } from '../../types/chat';
 import { RootState } from '../index';
 import { unregisterSubscriptionsByPrefix } from '../../utils/subscriptionManager';
+
+interface UserCache {
+  [userId: string]: {
+    displayName: string;
+    photoURL: string | null;
+    lastFetched: number;
+  }
+}
 
 interface ChatState {
   activeChats: Chat[];
@@ -11,14 +20,45 @@ interface ChatState {
   loading: {
     chatList: boolean;
     messages: boolean;
+    userInfo: boolean;
   };
   error: string | null;
   processedMessageIds: { [messageId: string]: boolean }; // Track processed messages
   lastCleanup: number; // Track last cleanup timestamp
+  userCache: UserCache;
 }
 
 // Action to clear chats and messages when switching workspaces
 export const clearChats = createAction('chat/clearChats');
+
+// Fetch user information
+export const fetchUserInfo = createAsyncThunk(
+  'chat/fetchUserInfo',
+  async (userId: string, { getState }) => {
+    const state = getState() as RootState;
+    const cachedUser = state.chat.userCache[userId];
+    const now = Date.now();
+    
+    // Return cached data if it's less than 5 minutes old
+    if (cachedUser && (now - cachedUser.lastFetched < 5 * 60 * 1000)) {
+      return null;
+    }
+    
+    const userData = await userService.getUserData(userId);
+    if (!userData) {
+      throw new Error('User not found');
+    }
+    
+    return {
+      userId,
+      userData: {
+        displayName: userData.displayName || userData.email || 'Unknown User',
+        photoURL: userData.photoURL || null,
+        lastFetched: now
+      }
+    };
+  }
+);
 
 export const fetchUserChats = createAsyncThunk(
   'chat/fetchUserChats',
@@ -43,11 +83,13 @@ const initialState: ChatState = {
   currentChatId: null,
   loading: {
     chatList: false,
-    messages: false
+    messages: false,
+    userInfo: false
   },
   error: null,
   processedMessageIds: {},
-  lastCleanup: Date.now()
+  lastCleanup: Date.now(),
+  userCache: {}
 };
 
 // Helper function to clean up old message IDs
@@ -158,6 +200,23 @@ const chatSlice = createSlice({
     }
   },
   extraReducers: (builder) => {
+    // Fetch user info
+    builder.addCase(fetchUserInfo.pending, (state) => {
+      state.loading.userInfo = true;
+      state.error = null;
+    });
+    builder.addCase(fetchUserInfo.fulfilled, (state, action) => {
+      state.loading.userInfo = false;
+      if (action.payload) {
+        const { userId, userData } = action.payload;
+        state.userCache[userId] = userData;
+      }
+    });
+    builder.addCase(fetchUserInfo.rejected, (state, action) => {
+      state.loading.userInfo = false;
+      state.error = action.error.message ?? 'Failed to fetch user info';
+    });
+
     // Handle clear chats
     builder.addCase(clearChats, (state) => {
       state.activeChats = [];

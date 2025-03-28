@@ -227,7 +227,6 @@ const taskSlice = createSlice({
       state.loading = false;
       
       // Update the task in state instead of waiting for subscription
-      // This provides immediate UI feedback
       const index = state.tasks.findIndex(task => task.id === action.payload.id);
       if (index !== -1) {
         // Make sure to preserve attachments if they exist

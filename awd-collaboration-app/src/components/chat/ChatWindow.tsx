@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
 import { RootState, useAppDispatch } from '../../store';
 import { Message } from '../../types/chat';
+import { useUserInfo } from '../../hooks/useUserInfo';
 import MessageInput from './MessageInput';
 import { 
   fetchChatMessages, 
@@ -25,6 +25,7 @@ const ChatMessage = ({ message, currentUserId }: ChatMessageProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const isOwnMessage = message.senderId === currentUserId;
+  const { displayName, photoURL, loading: loadingUser } = useUserInfo(message.senderId);
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -52,7 +53,6 @@ const ChatMessage = ({ message, currentUserId }: ChatMessageProps) => {
       setIsEditing(false);
     } catch (error) {
       console.error('Failed to update message:', error);
-      // Reset to original content on error
       setEditContent(message.content);
     }
   };
@@ -77,88 +77,102 @@ const ChatMessage = ({ message, currentUserId }: ChatMessageProps) => {
       })).unwrap();
     } catch (error) {
       console.error('Failed to delete message:', error);
-      // Could add UI feedback here for error
     }
   };
 
   return (
     <div className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'} mb-4 group`}>
-      <div
-        className={`relative max-w-[70%] rounded-lg px-4 py-2 ${
-          isOwnMessage
-            ? 'bg-primary-600 text-white'
-            : 'bg-gray-100 text-gray-900'
-        }`}
-      >
-        {isEditing ? (
-          <div className="flex flex-col space-y-2">
-            <textarea
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              className="w-full p-2 text-sm text-gray-900 bg-white rounded border focus:outline-none focus:ring-2 focus:ring-primary-500"
-              rows={2}
-            />
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={handleSave}
-                className="p-1 text-green-500 hover:text-green-600"
-                title="Save"
-              >
-                <CheckIcon className="h-4 w-4" />
-              </button>
-              <button
-                onClick={handleCancel}
-                className="p-1 text-red-500 hover:text-red-600"
-                title="Cancel"
-              >
-                <XMarkIcon className="h-4 w-4" />
-              </button>
-            </div>
+      <div className="flex items-start space-x-2">
+        {!isOwnMessage && (
+          <div className="flex-shrink-0">
+            {photoURL ? (
+              <img
+                src={photoURL}
+                alt={displayName}
+                className="h-8 w-8 rounded-full object-cover"
+              />
+            ) : (
+              <UserCircleIcon className="h-8 w-8 text-gray-400" />
+            )}
           </div>
-        ) : (
-          <>
-            <div className="text-sm break-words">
-              {message.isDeleted ? (
-                <span className="italic opacity-60">[Message deleted]</span>
-              ) : (
-                message.content
-              )}
+        )}
+        <div className={`relative max-w-[70%] rounded-lg px-4 py-2 ${
+          isOwnMessage ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-900'
+        }`}>
+          {!isOwnMessage && !loadingUser && (
+            <div className="font-medium text-sm text-gray-900 mb-1">
+              {displayName}
             </div>
-            <div className="flex items-center justify-between">
-              <div className={`text-xs mt-1 ${isOwnMessage ? 'text-primary-100' : 'text-gray-500'}`}>
-                {new Date(message.timestamp).toLocaleTimeString()}
-                {message.edited && (
-                  <span className="ml-1 italic">(edited)</span>
+          )}
+          {isEditing ? (
+            <div className="flex flex-col space-y-2">
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                className="w-full p-2 text-sm text-gray-900 bg-white rounded border focus:outline-none focus:ring-2 focus:ring-primary-500"
+                rows={2}
+              />
+              <div className="flex justify-end space-x-2">
+                <button
+                  onClick={handleSave}
+                  className="p-1 text-green-500 hover:text-green-600"
+                  title="Save"
+                >
+                  <CheckIcon className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleCancel}
+                  className="p-1 text-red-500 hover:text-red-600"
+                  title="Cancel"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="text-sm break-words">
+                {message.isDeleted ? (
+                  <span className="italic opacity-60">[Message deleted]</span>
+                ) : (
+                  message.content
                 )}
               </div>
-              {isOwnMessage && !message.isDeleted && (
-                <div className="hidden group-hover:flex items-center space-x-1 ml-2">
-                  <button
-                    onClick={handleEdit}
-                    className={`p-1 ${isOwnMessage ? 'text-primary-100 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}
-                    title="Edit message"
-                  >
-                    <PencilIcon className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    className={`p-1 ${isOwnMessage ? 'text-primary-100 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}
-                    title="Delete message"
-                  >
-                    <TrashIcon className="h-3 w-3" />
-                  </button>
+              <div className="flex items-center justify-between">
+                <div className={`text-xs mt-1 ${isOwnMessage ? 'text-primary-100' : 'text-gray-500'}`}>
+                  {new Date(message.timestamp).toLocaleTimeString()}
+                  {message.edited && (
+                    <span className="ml-1 italic">(edited)</span>
+                  )}
                 </div>
-              )}
-            </div>
-          </>
-        )}
+                {isOwnMessage && !message.isDeleted && (
+                  <div className="hidden group-hover:flex items-center space-x-1 ml-2">
+                    <button
+                      onClick={handleEdit}
+                      className={`p-1 ${isOwnMessage ? 'text-primary-100 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                      title="Edit message"
+                    >
+                      <PencilIcon className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      className={`p-1 ${isOwnMessage ? 'text-primary-100 hover:text-white' : 'text-gray-400 hover:text-gray-600'}`}
+                      title="Delete message"
+                    >
+                      <TrashIcon className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
 };
 
 const ChatWindow = () => {
-  // Use typed dispatch
   const dispatch = useAppDispatch();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { currentChatId, messages, activeChats, loading: { messages: loading } } = useSelector(
@@ -174,7 +188,6 @@ const ChatWindow = () => {
     console.warn('Chat not found:', currentChatId);
   }
 
-  // Set up real-time message subscription when chat changes
   useEffect(() => {
     let unsubscribe: () => void;
 
@@ -194,11 +207,9 @@ const ChatWindow = () => {
           unsubscribe = unsub;
         } catch (error) {
           console.error('Failed to subscribe to messages:', error);
-          // If the error is due to workspace access, navigate back to workspace selection
           if (error instanceof Error && error.message.includes('not a member of this workspace')) {
             console.log('User lost workspace access, redirecting...');
             dispatch(setCurrentChat(null));
-            // Optionally navigate to workspace selection
           }
         }
       }
@@ -213,7 +224,6 @@ const ChatWindow = () => {
     };
   }, [currentChatId, user, dispatch]);
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -230,7 +240,6 @@ const ChatWindow = () => {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Chat Header */}
       <div className="flex-shrink-0 p-4 border-b border-gray-200">
         {currentChat.type === 'channel' ? (
           <>
@@ -258,7 +267,6 @@ const ChatWindow = () => {
         )}
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {loading && currentMessages.length === 0 ? (
           <div className="flex justify-center items-center h-24">
@@ -280,7 +288,6 @@ const ChatWindow = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Message Input */}
       <MessageInput chatId={currentChatId} />
     </div>
   );

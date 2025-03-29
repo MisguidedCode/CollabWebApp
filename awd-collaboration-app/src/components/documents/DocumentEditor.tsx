@@ -13,6 +13,7 @@ import {
   uploadDocumentContentThunk
 } from '../../store/slices/documentSlice';
 import { Document } from '../../types/document';
+import { connectionManager } from '../../utils/WebSocketConnectionManager';
 
 // Import toolbar components
 import {
@@ -71,6 +72,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
   
   const [isSaving, setIsSaving] = useState(false);
   const [isConnecting, setIsConnecting] = useState(true);
+  const [isProviderReady, setIsProviderReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasDraft, setHasDraft] = useState(false);
   const [collaborators, setCollaborators] = useState<{[key: string]: ProviderAwarenessState}>({});
@@ -79,6 +81,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState<Date | null>(null);
   const [nextAutoSaveIn, setNextAutoSaveIn] = useState<number>(30);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
   
   // References for Yjs and WebsocketProvider
   const ydocRef = useRef<Y.Doc | null>(null);
@@ -87,16 +90,13 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
 
   // Initialize Y.js document
   useEffect(() => {
-    // Create a new Y.js document first
     if (!ydocRef.current) {
       ydocRef.current = new Y.Doc();
-      // Create the XML fragment that the editor will use
       fragmentRef.current = ydocRef.current.getXmlFragment('document-content');
       console.log("Created new Y.js document");
     }
     
     return () => {
-      // Clean up on unmount
       if (ydocRef.current) {
         ydocRef.current.destroy();
         ydocRef.current = null;
@@ -111,12 +111,9 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
     if (!documentId || !user || !ydocRef.current) return;
     
     try {
-      // Connect to the WebSocket server
       const wsUrl = 'ws://localhost:4444';
-      
       console.log(`Connecting to WebSocket at ${wsUrl} for document ${documentId}`);
       
-      // Create a WebSocket provider
       const provider = new WebsocketProvider(
         wsUrl,
         `document-${documentId}`,
@@ -125,7 +122,6 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
       
       providerRef.current = provider;
       
-      // Set user awareness state
       provider.awareness.setLocalStateField('user', {
         id: user.uid,
         name: user.displayName || user.email || 'Anonymous',
@@ -135,20 +131,21 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
       provider.awareness.setLocalStateField('color', getRandomColor());
       provider.awareness.setLocalStateField('name', user.displayName || user.email || 'Anonymous');
       
-      // Listen for connection status
-      provider.on('status', (event: { status: string }) => {
+      const componentId = `DocEditor_${documentId}`;
+      const statusHandler = (event: { status: string }) => {
         console.log("WebSocket status changed:", event.status);
         if (event.status === 'connected') {
+          setIsProviderReady(true);
           setIsConnecting(false);
           setError(null);
         } else if (event.status === 'disconnected') {
+          setIsProviderReady(false);
           setIsConnecting(true);
           setError('Disconnected from collaboration server. Trying to reconnect...');
         }
-      });
-      
-      // Listen for awareness updates
-      provider.awareness.on('update', () => {
+      };
+
+      const awarenessHandler = () => {
         const states = provider.awareness.getStates() as Map<number, ProviderAwarenessState>;
         const collaboratorsObj: {[key: string]: ProviderAwarenessState} = {};
         
@@ -159,20 +156,30 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
         });
         
         setCollaborators(collaboratorsObj);
-      });
+      };
+
+      provider.on('status', statusHandler);
+      provider.awareness.on('update', awarenessHandler);
       
+      // Register with the connection manager
+      connectionManager.registerListener(documentId, componentId);
+
       console.log("WebSocket connection established");
       
       return () => {
-        // Clean up on unmount or when dependencies change
         console.log("Disconnecting from WebSocket server");
+        provider.off('status', statusHandler);
+        provider.awareness.off('update', awarenessHandler);
+        connectionManager.unregisterListener(documentId, componentId);
         provider.disconnect();
         providerRef.current = null;
+        setIsProviderReady(false);
       };
     } catch (err) {
       console.error("Error connecting to WebSocket server:", err);
       setError(`Failed to connect to collaboration server: ${err instanceof Error ? err.message : String(err)}`);
       setIsConnecting(false);
+      setIsProviderReady(false);
     }
   }, [documentId, user]);
   
@@ -180,37 +187,37 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        history: false, // Disable history as we're using the Collaboration extension
+        history: false,
       }),
-      // Add Collaboration extension with null checks
       Collaboration.configure({
         document: ydocRef.current || new Y.Doc(),
         fragment: fragmentRef.current || undefined,
       }),
-      CollaborationCursor.configure({
-        provider: providerRef.current || undefined,
-        user: user ? {
-          name: user.displayName || user.email || 'Anonymous',
-          color: getRandomColor(),
-        } : undefined,
-      }),
+      // Only add CollaborationCursor when provider is ready
+      ...(isProviderReady && providerRef.current ? [
+        CollaborationCursor.configure({
+          provider: providerRef.current,
+          user: user ? {
+            name: user.displayName || user.email || 'Anonymous',
+            color: getRandomColor(),
+          } : undefined,
+        })
+      ] : []),
     ],
     editable: !readOnly,
     content: '',
     onUpdate: ({ editor }) => {
-      // Set unsaved changes flag when content changes
       setHasUnsavedChanges(true);
     }
-  }, [user, readOnly]);
+  }, [user, readOnly, isProviderReady, editorKey]);
 
-  // Update collaboration settings when provider changes
+  // Update collaboration settings when provider status changes
   useEffect(() => {
-    if (editor && providerRef.current) {
-      editor.extensionManager.extensions
-        .find(ext => ext.name === 'collaboration-cursor')
-        ?.configure({ provider: providerRef.current });
+    if (editor && providerRef.current && isProviderReady) {
+      // Force editor recreation when provider becomes ready
+      setEditorKey(prev => prev + 1);
     }
-  }, [editor, providerRef.current]);
+  }, [editor, isProviderReady]);
 
   // Handle unsaved changes warning
   useEffect(() => {
@@ -251,12 +258,10 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
       if (shouldRestore) {
         setIsRestoringDraft(true);
         editor.commands.setContent(draft.content);
-        // Remove the draft after restoration
         documentStorage.removeDraft(documentId);
         setHasDraft(false);
         setIsRestoringDraft(false);
       } else {
-        // User declined, remove the draft
         documentStorage.removeDraft(documentId);
         setHasDraft(false);
       }
@@ -269,7 +274,6 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
   useEffect(() => {
     if (!documentId || !editor || !user || readOnly) return;
 
-    // Auto-save interval (30 seconds)
     const autoSaveInterval = setInterval(async () => {
       const content = editor.getHTML();
       await documentStorage.saveDraft(documentId, content);
@@ -277,7 +281,6 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
       setNextAutoSaveIn(30);
     }, 30000);
 
-    // Countdown timer for next auto-save
     const countdownInterval = setInterval(() => {
       setNextAutoSaveIn(prev => Math.max(0, prev - 1));
     }, 1000);
@@ -294,11 +297,8 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
     
     try {
       setIsSaving(true);
-
-      // Get HTML content from editor
       const htmlContent = editor.getHTML();
       
-      // Upload content
       const uploadSuccess = await dispatch(uploadDocumentContentThunk({
         documentId: document.id,
         content: htmlContent,
@@ -306,7 +306,6 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
       })).unwrap();
 
       if (uploadSuccess) {
-        // Update document metadata
         await dispatch(updateDocumentThunk({
           document: {
             ...document,
@@ -316,13 +315,11 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
           userId: user.uid
         })).unwrap();
 
-        // Save metadata and remove draft
         await documentStorage.saveMetadata(document);
         documentStorage.removeDraft(document.id);
         setLastSavedAt(new Date());
         setHasUnsavedChanges(false);
         
-        // Call onSave callback if provided
         if (onSave) {
           onSave(document);
         }
@@ -359,11 +356,12 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
       {!editor && (
         <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-10">
           <div className="text-center">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2 animate-spin"></div>
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-2 animate-spin" />
             <div className="text-gray-600">Initializing editor...</div>
           </div>
         </div>
       )}
+      
       {/* Editor Toolbar */}
       {!readOnly && editor && (
         <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 bg-gray-50">
@@ -371,23 +369,23 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
           <Italic editor={editor} />
           <Underline editor={editor} />
           <Code editor={editor} />
-          <div className="w-px h-6 mx-1 bg-gray-300" />
+          <div key="divider-1" className="w-px h-6 mx-1 bg-gray-300" />
           <Heading1 editor={editor} />
           <Heading2 editor={editor} />
-          <div className="w-px h-6 mx-1 bg-gray-300" />
+          <div key="divider-2" className="w-px h-6 mx-1 bg-gray-300" />
           <BulletList editor={editor} />
           <OrderedList editor={editor} />
-          <div className="w-px h-6 mx-1 bg-gray-300" />
+          <div key="divider-3" className="w-px h-6 mx-1 bg-gray-300" />
           <Blockquote editor={editor} />
           <CodeBlock editor={editor} />
           <HorizontalRule editor={editor} />
-          <div className="w-px h-6 mx-1 bg-gray-300" />
+          <div key="divider-4" className="w-px h-6 mx-1 bg-gray-300" />
           <Undo editor={editor} />
           <Redo editor={editor} />
-          <div className="flex-grow" />
+          <div key="flex-grow" className="flex-grow" />
           {hasUnsavedChanges && (
-            <div className="text-sm text-yellow-600 mr-2 flex items-center">
-              <div className="w-2 h-2 mr-1 rounded-full bg-yellow-500 animate-pulse"></div>
+            <div key="unsaved-changes" className="text-sm text-yellow-600 mr-2 flex items-center">
+              <div key="unsaved-indicator" className="w-2 h-2 mr-1 rounded-full bg-yellow-500 animate-pulse" />
               Unsaved changes
             </div>
           )}
@@ -399,40 +397,40 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
       )}
       
       {/* Status Bar */}
-      <div className="flex items-center justify-between p-2 border-b border-gray-200 bg-gray-50">
+      <div key="status-bar" className="flex items-center justify-between p-2 border-b border-gray-200 bg-gray-50">
         {/* Connection Status */}
-        <div className="flex items-center">
+        <div key="connection-status" className="flex items-center">
           {isConnecting ? (
-            <div className="flex items-center text-yellow-600">
-              <div className="w-2 h-2 mr-2 rounded-full bg-yellow-500 animate-pulse"></div>
+            <div key="connecting" className="flex items-center text-yellow-600">
+              <div className="w-2 h-2 mr-2 rounded-full bg-yellow-500 animate-pulse" />
               Connecting to collaboration server...
             </div>
           ) : error ? (
-            <div className="flex items-center text-red-600">
-              <div className="w-2 h-2 mr-2 rounded-full bg-red-500"></div>
+            <div key="error" className="flex items-center text-red-600">
+              <div className="w-2 h-2 mr-2 rounded-full bg-red-500" />
               {error}
             </div>
           ) : (
-            <div className="flex items-center text-green-600">
-              <div className="w-2 h-2 mr-2 rounded-full bg-green-500"></div>
+            <div key="connected" className="flex items-center text-green-600">
+              <div className="w-2 h-2 mr-2 rounded-full bg-green-500" />
               Connected
             </div>
           )}
         </div>
         
         {/* Save Status & Draft Info */}
-        <div className="flex items-center gap-4">
+        <div key="save-status" className="flex items-center gap-4">
           {/* Save Status */}
           <div className="text-sm text-gray-500">
             <span className="flex items-center">
               {isSaving ? (
-                <>
-                  <div className="w-2 h-2 mr-2 rounded-full bg-blue-500 animate-pulse"></div>
+                <React.Fragment key="saving-indicator">
+                  <div className="w-2 h-2 mr-2 rounded-full bg-blue-500 animate-pulse" />
                   Saving...
-                </>
+                </React.Fragment>
               ) : (
-                <>
-                  <div className="w-2 h-2 mr-2 rounded-full bg-green-500"></div>
+                <React.Fragment key="saved-indicator">
+                  <div className="w-2 h-2 mr-2 rounded-full bg-green-500" />
                   {lastSavedAt ? (
                     <>
                       Saved {lastSavedAt.toLocaleTimeString()} 
@@ -443,25 +441,27 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
                   ) : (
                     'All changes saved'
                   )}
-                </>
+                </React.Fragment>
               )}
             </span>
           </div>
 
           {/* Auto-save Status */}
           {!readOnly && (
-            <div className="text-sm text-gray-400">
+            <div key="auto-save-status" className="text-sm text-gray-400">
               <span className="flex items-center">
                 <div className={`w-1.5 h-1.5 mr-2 rounded-full ${
                   nextAutoSaveIn === 0 ? 'bg-blue-400 animate-ping' : 'bg-gray-400'
-                }`}></div>
+                }`} />
                 {lastDraftSavedAt ? (
-                  <>
+                  <React.Fragment key="draft-saved">
                     Auto-saved {lastDraftSavedAt.toLocaleTimeString()} 
                     {nextAutoSaveIn > 0 && ` · Next in ${nextAutoSaveIn}s`}
-                  </>
+                  </React.Fragment>
                 ) : (
-                  `Auto-save in ${nextAutoSaveIn}s`
+                  <React.Fragment key="draft-pending">
+                    {`Auto-save in ${nextAutoSaveIn}s`}
+                  </React.Fragment>
                 )}
               </span>
             </div>
@@ -469,9 +469,9 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
 
           {/* Draft Available */}
           {hasDraft && !isRestoringDraft && (
-            <div className="text-sm text-yellow-600">
+            <div key="draft-available" className="text-sm text-yellow-600">
               <span className="flex items-center">
-                <div className="w-2 h-2 mr-2 rounded-full bg-yellow-500"></div>
+                <div className="w-2 h-2 mr-2 rounded-full bg-yellow-500" />
                 Unsaved draft available
               </span>
             </div>
@@ -479,24 +479,26 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
         </div>
 
         {/* Collaborators */}
-        <div className="flex items-center ml-4">
+        <div key="collaborators-section" className="flex items-center ml-4">
           {Object.values(collaborators).length > 0 && (
             <div key={`collaborators-container-${Object.values(collaborators).length}`} className="flex items-center space-x-1 mr-2">
-              {Object.values(collaborators).map((collaborator) => (
+              {Object.values(collaborators).map((collaborator, index) => (
                 <div
-                  key={collaborator.user.id}
+                  key={`${collaborator.user.id}-${index}`}
                   className="flex items-center rounded-full px-2 py-1 text-xs text-white"
                   style={{ backgroundColor: collaborator.color }}
                   title={collaborator.name}
                 >
                   {collaborator.user.photoURL ? (
                     <img
+                      key={`avatar-${collaborator.user.id}`}
                       src={collaborator.user.photoURL}
                       alt={collaborator.name}
                       className="w-5 h-5 rounded-full mr-1"
                     />
                   ) : (
                     <div
+                      key={`initial-${collaborator.user.id}`}
                       className="w-5 h-5 rounded-full mr-1 flex items-center justify-center text-white"
                       style={{ backgroundColor: collaborator.color }}
                     >
@@ -508,7 +510,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
               ))}
             </div>
           )}
-          <div className="text-sm text-gray-500">
+          <div key="collaborator-count" className="text-sm text-gray-500">
             {Object.values(collaborators).length === 0
               ? 'You are the only editor'
               : `${Object.values(collaborators).length} other ${
@@ -519,24 +521,25 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({ documentId, readOnly = 
       </div>
       
       {/* Editor Content */}
-      <div className="flex-grow overflow-auto p-4">
+      <div key="editor-content" className="flex-grow overflow-auto p-4">
         <div className="max-w-4xl mx-auto">
           <EditorContent editor={editor} className="prose max-w-none" />
         </div>
       </div>
       
-      {/* Debug Information (can be removed in production) */}
+      {/* Debug Information */}
       {process.env.NODE_ENV !== 'production' && (
-        <div className="p-2 border-t border-gray-200 bg-gray-50 text-xs text-gray-500">
+        <div key="debug-info" className="p-2 border-t border-gray-200 bg-gray-50 text-xs text-gray-500">
           <details>
             <summary>Debug Info</summary>
             <div className="mt-1 space-y-1">
-              <div>Document ID: {documentId}</div>
-              <div>Y.js Doc Initialized: {ydocRef.current ? 'Yes' : 'No'}</div>
-              <div>XML Fragment Initialized: {fragmentRef.current ? 'Yes' : 'No'}</div>
-              <div>WebSocket Provider: {providerRef.current ? 'Connected' : 'Not Connected'}</div>
-              <div>Editor Initialized: {editor ? 'Yes' : 'No'}</div>
-              <div>Collaborators: {Object.keys(collaborators).length}</div>
+              <div key="debug-document-id">Document ID: {documentId}</div>
+              <div key="debug-ydoc">Y.js Doc Initialized: {ydocRef.current ? 'Yes' : 'No'}</div>
+              <div key="debug-fragment">XML Fragment Initialized: {fragmentRef.current ? 'Yes' : 'No'}</div>
+              <div key="debug-provider">WebSocket Provider: {providerRef.current ? 'Connected' : 'Not Connected'}</div>
+              <div key="debug-editor">Editor Initialized: {editor ? 'Yes' : 'No'}</div>
+              <div key="debug-provider-ready">Provider Ready: {isProviderReady ? 'Yes' : 'No'}</div>
+              <div key="debug-collaborators">Collaborators: {Object.keys(collaborators).length}</div>
             </div>
           </details>
         </div>

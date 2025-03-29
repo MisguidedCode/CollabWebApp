@@ -5,9 +5,9 @@ import {
   WebSocketEventMap,
   UserPresence
 } from './types';
-import { EventEmitter } from './EventEmitter';
 import { MessageQueue } from './MessageQueue';
 import { PresenceManager } from './PresenceManager';
+import { connectionManager } from '../../utils/WebSocketConnectionManager';
 
 export class WebSocketService {
   private socket: WebSocket | null = null;
@@ -15,13 +15,13 @@ export class WebSocketService {
   private config: WebSocketConfig;
   private reconnectAttempts: number = 0;
   private reconnectTimer?: NodeJS.Timeout;
-  private eventEmitter: EventEmitter;
+  private eventEmitter: ReturnType<typeof connectionManager.getEventEmitter>;
   private messageQueue: MessageQueue;
   private presenceManager?: PresenceManager;
 
   constructor(config: WebSocketConfig) {
     this.config = config;
-    this.eventEmitter = new EventEmitter(30); // Increased from default 10 to accommodate more listeners
+    this.eventEmitter = connectionManager.getEventEmitter(); // Use the monitored event emitter
     this.messageQueue = new MessageQueue(
       async (message) => this.sendMessage(message),
       {
@@ -172,9 +172,10 @@ export class WebSocketService {
 
   public on<K extends keyof WebSocketEventMap>(
     event: K,
-    callback: (data: WebSocketEventMap[K]) => void
+    callback: (data: WebSocketEventMap[K]) => void,
+    componentId?: string
   ): () => void {
-    return this.eventEmitter.on(event, callback);
+    return this.eventEmitter.on(event, callback, componentId);
   }
 
   public getStatus(): ConnectionStatus {

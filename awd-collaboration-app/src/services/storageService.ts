@@ -48,15 +48,15 @@ export const uploadTaskAttachment = (
         try {
           const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
           const attachment: TaskAttachment = {
-            id: storedFileName, // Store the actual filename in storage
+            id: storedFileName, 
             taskId,
-            fileName: file.name, // Original filename for display
+            fileName: file.name, 
             fileType: file.type,
             fileSize: file.size,
-            uploadedBy: 'user1', // TODO: Get from auth context
+            uploadedBy: 'user1', 
             uploadedAt: new Date().toISOString(),
             downloadUrl,
-            storedFileName: storedFileName // Add this field to track the actual stored filename
+            storedFileName: storedFileName 
           };
           onProgress?.({ progress: 100, downloadUrl });
           resolve(attachment);

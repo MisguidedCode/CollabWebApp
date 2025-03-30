@@ -49,7 +49,8 @@ class DocumentStorageManager {
 
   // Get document draft
   public getDraft(documentId: string): DocumentDraft | null {
-    return storageManager.get(`${STORAGE_KEYS.DRAFT}:${documentId}`);
+    const draft = storageManager.get<DocumentDraft>(`${STORAGE_KEYS.DRAFT}:${documentId}`);
+    return draft || null;
   }
 
   // Remove document draft
@@ -86,7 +87,7 @@ class DocumentStorageManager {
       updatedAt: doc.updatedAt
     }));
 
-    return storageManager.set(
+    return await storageManager.set(
       STORAGE_KEYS.RECENT,
       recentList,
       1 // Normal priority
@@ -121,10 +122,11 @@ class DocumentStorageManager {
   // Clear expired drafts
   public clearExpiredDrafts(): void {
     const prefix = `${STORAGE_KEYS.DRAFT}:`;
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(prefix)) {
-        const draft = storageManager.get<DocumentDraft>(key.slice(prefix.length));
+    const keys = Object.keys(localStorage);
+    for (const key of keys) {
+      if (key.startsWith(prefix)) {
+        const documentId = key.slice(prefix.length);
+        const draft = this.getDraft(documentId);
         if (!draft) {
           localStorage.removeItem(key);
         }

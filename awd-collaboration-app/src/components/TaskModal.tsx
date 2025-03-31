@@ -138,7 +138,7 @@ const { workspaces } = useSelector((state: RootState) => state.workspace);
         dueDate: formData.dueDate || undefined,
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
         attachments: attachments, // Use our managed local state
-        assignedTo: assignee?.userId || editTask?.assignedTo,
+        assignedTo: assignee?.userId || editTask?.assignedTo || null,
         assignee: assignee,
       };
 

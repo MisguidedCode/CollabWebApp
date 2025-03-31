@@ -15,7 +15,7 @@ export interface Task {
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
-  assignedTo?: string;
+  assignedTo?: string | null;
   assignee?: TaskAssignee;
   createdBy: string;
   createdAt: string;

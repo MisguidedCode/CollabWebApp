@@ -15,7 +15,8 @@ import TaskModal from '../components/TaskModal';
 import { 
   fetchTasks, 
   updateTaskStatusThunk, 
-  deleteTaskThunk
+  deleteTaskThunk,
+  unsubscribeTasks
 } from '../store/slices/taskSlice';
 
 const COLUMN_CONFIG: { id: TaskStatus; title: string }[] = [
@@ -30,6 +31,25 @@ const TasksPage = () => {
   const dispatch = useAppDispatch();
   const { tasks, loading, error } = useSelector((state: RootState) => state.tasks);
   const user = useSelector((state: RootState) => state.auth.user);
+  const currentWorkspaceId = useSelector((state: RootState) => state.workspace.currentWorkspaceId);
+
+  // Fetch tasks when workspace changes
+  useEffect(() => {
+    const userId = user?.uid;
+    
+    if (userId && currentWorkspaceId) {
+      // Clean up existing task subscriptions
+      unsubscribeTasks();
+      // Fetch tasks for new workspace
+      dispatch(fetchTasks());
+    }
+    
+    // Cleanup subscriptions on unmount
+    return () => {
+      unsubscribeTasks();
+    };
+  }, [dispatch, user?.uid, currentWorkspaceId]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined>(undefined);
   

@@ -13,7 +13,8 @@ import {
   getUserInvitations,
   joinWorkspace,
   subscribeToUserWorkspaces,
-  subscribeToUserInvitations
+  subscribeToUserInvitations,
+  updateInvitationStatus
 } from '../../services/workspaceService';
 import { User } from '../../types/auth';
 import {
@@ -48,7 +49,7 @@ export const fetchUserWorkspaces = createAsyncThunk(
       });
       
       // Register subscription for cleanup
-      registerSubscription('userWorkspaces', unsubscribe);
+      registerSubscription('userWorkspaces', unsubscribe, 'WorkspaceSlice', 'workspace');
       
       return workspaces;
     } catch (error) {
@@ -73,7 +74,7 @@ export const fetchUserInvitations = createAsyncThunk(
       });
       
       // Register subscription for cleanup
-      registerSubscription('userInvitations', unsubscribe);
+      registerSubscription('userInvitations', unsubscribe, 'WorkspaceSlice', 'invitation');
       
       return invitations;
     } catch (error) {
@@ -177,6 +178,20 @@ export const inviteToWorkspace = createAsyncThunk(
       return await createInvitation(invitation);
     } catch (error) {
       console.error("Error inviting to workspace:", error);
+      return rejectWithValue(error instanceof Error ? error.message : String(error));
+    }
+  }
+);
+
+export const declineWorkspaceInvitation = createAsyncThunk(
+  'workspace/declineInvitation',
+  async (invitationId: string, { rejectWithValue }) => {
+    try {
+      console.log("Declining invitation:", invitationId);
+      await updateInvitationStatus(invitationId, 'declined');
+      return invitationId;
+    } catch (error) {
+      console.error("Error declining workspace invitation:", error);
       return rejectWithValue(error instanceof Error ? error.message : String(error));
     }
   }
@@ -416,6 +431,21 @@ const workspaceSlice = createSlice({
       state.loading = false;
     });
     builder.addCase(acceptWorkspaceInvitation.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload as string;
+    });
+
+    // declineWorkspaceInvitation
+    builder.addCase(declineWorkspaceInvitation.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    });
+    builder.addCase(declineWorkspaceInvitation.fulfilled, (state, action) => {
+      // Remove declined invitation
+      state.invitations = state.invitations.filter(inv => inv.id !== action.payload);
+      state.loading = false;
+    });
+    builder.addCase(declineWorkspaceInvitation.rejected, (state, action) => {
       state.loading = false;
       state.error = action.payload as string;
     });

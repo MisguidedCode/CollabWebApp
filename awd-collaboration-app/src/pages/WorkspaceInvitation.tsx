@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RootState, useAppDispatch } from '../store';
-import { acceptWorkspaceInvitation } from '../store/slices/workspaceSlice';
+import { acceptWorkspaceInvitation, declineWorkspaceInvitation } from '../store/slices/workspaceSlice';
 import { WorkspaceInvitation } from '../types/workspace';
 import { 
   CheckCircleIcon, 
@@ -60,11 +60,18 @@ const WorkspaceInvitationPage = () => {
           setIsSubmitting(false);
         }
       } else if (action === 'decline') {
-        // Handle decline (to be implemented)
-        setSuccess(`You have declined the invitation to join: ${invitation.workspaceName}`);
-        setTimeout(() => {
-          navigate('/workspaces/manage');
-        }, 3000);
+        try {
+          setIsSubmitting(true);
+          await dispatch(declineWorkspaceInvitation(invitation.id)).unwrap();
+          setSuccess(`You have declined the invitation to join: ${invitation.workspaceName}`);
+          setTimeout(() => {
+            navigate('/workspaces/manage');
+          }, 3000);
+        } catch (err) {
+          setError((err as Error).message);
+        } finally {
+          setIsSubmitting(false);
+        }
       }
     };
     
@@ -147,12 +154,20 @@ const WorkspaceInvitationPage = () => {
               {action === 'decline' && (
                 <button
                   type="button"
-                  onClick={() => {
-                    // Handle decline action here
-                    setSuccess(`You have declined the invitation to join: ${invitation?.workspaceName}`);
-                    setTimeout(() => {
-                      navigate('/workspaces/manage');
-                    }, 3000);
+                  onClick={async () => {
+                    if (!invitation) return;
+                    try {
+                      setIsSubmitting(true);
+                      await dispatch(declineWorkspaceInvitation(invitation.id)).unwrap();
+                      setSuccess(`You have declined the invitation to join: ${invitation.workspaceName}`);
+                      setTimeout(() => {
+                        navigate('/workspaces/manage');
+                      }, 3000);
+                    } catch (err) {
+                      setError((err as Error).message);
+                    } finally {
+                      setIsSubmitting(false);
+                    }
                   }}
                   className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                 >

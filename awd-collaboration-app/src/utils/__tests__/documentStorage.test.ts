@@ -1,6 +1,6 @@
 import { StorageManager } from '../StorageManager';
 import { documentStorage } from '../documentStorage';
-import type { Document, DocumentType, DocumentStatus } from '../../types/document';
+import type { Document } from '../../types/document';
 import type { DocumentDraft } from '../documentStorage';
 
 // Mock the StorageManager module
@@ -30,25 +30,24 @@ describe('Document Storage', () => {
   const mockDocument: Document = {
     id: 'test-doc-1',
     title: 'Test Document',
-    type: 'text' as DocumentType,
     content: 'Test content',
     createdBy: 'user1',
     createdAt: new Date().toISOString(),
     updatedBy: 'user1',
     updatedAt: new Date().toISOString(),
-    status: 'draft' as DocumentStatus,
-    size: 100,
-    permissions: {
-      owner: 'user1',
-      readers: [],
-      editors: [],
-      commenters: [],
-      public: false,
-      workspaceId: 'workspace-1'
+    collaborators: [],
+    isPublic: false,
+    version: 1,
+    metadata: {
+      status: 'draft',
+      lastModifiedBy: 'user1',
+      lastModifiedAt: new Date().toISOString(),
+      collaborativeEditingEnabled: false
     },
-    workspace: {
-      id: 'workspace-1',
-      name: 'Test Workspace'
+    permissions: {
+      read: ['user1'],
+      write: ['user1'],
+      admin: ['user1']
     }
   };
 

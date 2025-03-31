@@ -20,20 +20,16 @@ class MonitoredEventEmitter extends EventEmitter {
     this.componentIds = new Map();
   }
   
-  on<K extends keyof WebSocketEventMap>(
-    event: K,
-    callback: (data: WebSocketEventMap[K]) => void,
-    componentId?: string
-  ): () => void {
+  on<K extends keyof WebSocketEventMap>(event: K, callback: (data: WebSocketEventMap[K]) => void): () => void;
+  on(event: string, callback: (data: any) => void): () => void;
+  on(event: string | keyof WebSocketEventMap, callback: (data: any) => void, componentId?: string): () => void {
     this.updateListenerCount(event as string, 1);
     if (componentId) {
       this.trackComponentListener(event as string, componentId);
     }
     
-    // Get the current count for this event
     const currentCount = this.listenerCounts.get(event as string) || 0;
     
-    // Warn if approaching limit (80% of max)
     if (currentCount >= this.getMaxListeners() * 0.8) {
       console.warn(
         `Warning: Event '${String(event)}' is approaching max listeners (${currentCount}/${this.getMaxListeners()})`,
@@ -84,6 +80,12 @@ class MonitoredEventEmitter extends EventEmitter {
     });
     return stats;
   }
+
+  emit(event: keyof WebSocketEventMap, data: WebSocketEventMap[keyof WebSocketEventMap]): void;
+  emit(event: string, data: any): void;
+  emit(event: string | keyof WebSocketEventMap, data: any): void {
+    super.emit(event, data);
+  }
 }
 
 export class WebSocketConnectionManager {
@@ -95,7 +97,7 @@ export class WebSocketConnectionManager {
   
   private constructor() {
     this.connections = new Map();
-    this.eventEmitter = new MonitoredEventEmitter(50); // Increased limit with monitoring
+    this.eventEmitter = new MonitoredEventEmitter(50);
     this.startCleanupInterval();
   }
   
@@ -170,11 +172,27 @@ export class WebSocketConnectionManager {
           this.cleanupConnection(connection, documentId);
         }
       });
-    }, 60000); // Check every minute
+    }, 60000);
   }
   
   getEventEmitter(): MonitoredEventEmitter {
     return this.eventEmitter;
+  }
+
+  subscribe<K extends keyof WebSocketEventMap>(event: K, callback: (data: WebSocketEventMap[K]) => void): () => void;
+  subscribe(event: string, callback: (data: any) => void): () => void;
+  subscribe(event: string | keyof WebSocketEventMap, callback: (data: any) => void): () => void {
+    return this.eventEmitter.on(event, callback);
+  }
+
+  emit<K extends keyof WebSocketEventMap>(event: K, data: WebSocketEventMap[K]): void;
+  emit(event: string, data: any): void;
+  emit(event: string | keyof WebSocketEventMap, data: any): void {
+    this.eventEmitter.emit(event, data);
+  }
+
+  onConnectionChange(callback: (connected: boolean) => void): () => void {
+    return this.subscribe('connectionStatus', callback);
   }
   
   destroy(): void {

@@ -45,6 +45,11 @@ export interface WebSocketEventMap {
   error: Error;
   statusChange: ConnectionStatus;
   presence: UserPresence;
+  connectionStatus: boolean;
+}
+
+export interface WebSocketEvents extends WebSocketEventMap {
+  [key: string]: any;
 }
 
 export type WebSocketEventCallback<T = any> = (data: T) => void;

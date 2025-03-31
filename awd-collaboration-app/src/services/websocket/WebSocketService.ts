@@ -170,12 +170,10 @@ export class WebSocketService {
     this.eventEmitter.emit('statusChange', status);
   }
 
-  public on<K extends keyof WebSocketEventMap>(
-    event: K,
-    callback: (data: WebSocketEventMap[K]) => void,
-    componentId?: string
-  ): () => void {
-    return this.eventEmitter.on(event, callback, componentId);
+  public on<K extends keyof WebSocketEventMap>(event: K, callback: (data: WebSocketEventMap[K]) => void): () => void;
+  public on(event: string, callback: (data: any) => void): () => void;
+  public on(event: string | keyof WebSocketEventMap, callback: (data: any) => void): () => void {
+    return this.eventEmitter.on(event, callback);
   }
 
   public getStatus(): ConnectionStatus {

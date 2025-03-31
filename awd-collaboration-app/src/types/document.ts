@@ -1,78 +1,59 @@
-import { CollaborationPermission } from './permissions';
-
-export type DocumentType = 'text' | 'spreadsheet' | 'presentation' | 'pdf' | 'other';
-export type DocumentStatus = 'draft' | 'published' | 'archived';
-
-export interface DocumentComment {
-  id: string;
-  content: string;
-  createdBy: string;
-  createdAt: string;
-  position?: {
-    page?: number;
-    selection?: {
-      from: number;
-      to: number;
-    };
-  };
-  resolved?: boolean;
-  resolvedBy?: string;
-  resolvedAt?: string;
-  replies?: DocumentComment[];
-}
-
-export interface DocumentVersion {
-  id: string;
-  createdBy: string;
-  createdAt: string;
-  name?: string;
-  description?: string;
-  contentUrl?: string;
-  contentHash?: string;
-}
-
-export interface DocumentPermissions {
-  owner: string;
-  readers: string[]; // User IDs
-  editors: string[]; // User IDs
-  commenters: string[]; // User IDs
-  public: boolean;
-  publicPermission?: CollaborationPermission;
-  workspaceId: string; // Required to enforce workspace boundaries
-}
-
 export interface Document {
   id: string;
   title: string;
-  type: DocumentType;
   content?: string;
-  contentUrl?: string;
-  thumbnailUrl?: string;
-  createdBy: string;
   createdAt: string;
-  updatedBy: string;
   updatedAt: string;
-  status: DocumentStatus;
-  tags?: string[];
+  createdBy: string;
+  updatedBy: string;
+  collaborators: string[];
+  isPublic: boolean;
+  version: number;
   size?: number;
-  starred?: boolean;
-  versions?: DocumentVersion[];
-  currentVersionId?: string;
-  permissions: DocumentPermissions;
-  comments?: DocumentComment[];
-  workspace: {
-    id: string;
-    name: string;
+  metadata: {
+    status: 'draft' | 'published';
+    lastModifiedBy: string;
+    lastModifiedAt: string;
+    collaborativeEditingEnabled: boolean;
+    shareableLink?: string;
   };
-  folder?: string;
-  metadata?: Record<string, any>;
+  ydoc?: {
+    state: Uint8Array;  // Y.js document state
+    updates: Array<{
+      timestamp: number;
+      state: Uint8Array;
+    }>;
+  };
+  permissions: {
+    read: string[];
+    write: string[];
+    admin: string[];
+  };
 }
 
-export interface DocumentState {
-  documents: Document[];
-  currentDocument: Document | null;
-  recentDocuments: Document[];
-  starredDocuments: Document[];
-  loading: boolean;
-  error: string | null;
+export interface DocumentDraft {
+  documentId: string;
+  content: string;
+  version: number;
+  timestamp: string;
+  conflictWith?: {
+    version: number;
+    timestamp: string;
+    userId: string;
+  };
+}
+
+export interface DocumentUpdate {
+  type: 'content' | 'metadata' | 'permissions';
+  changes: Partial<Document>;
+  userId: string;
+  timestamp: number;
+}
+
+export interface CollaborativeDocument extends Document {
+  collaborativeState: {
+    usersOnline: string[];
+    lastSync: string;
+    lockedBy?: string;
+  };
 }

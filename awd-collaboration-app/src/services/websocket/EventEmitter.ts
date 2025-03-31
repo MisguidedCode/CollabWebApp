@@ -1,7 +1,11 @@
 import { WebSocketEventCallback, WebSocketEventMap } from './types';
 
+type EventMap = WebSocketEventMap & {
+  [key: string]: any;
+};
+
 export class EventEmitter {
-  private events: Map<keyof WebSocketEventMap, Set<WebSocketEventCallback>>;
+  private events: Map<string, Set<WebSocketEventCallback>>;
   private maxListeners: number;
 
   constructor(maxListeners = 10) {
@@ -12,6 +16,14 @@ export class EventEmitter {
   public on<K extends keyof WebSocketEventMap>(
     event: K,
     callback: WebSocketEventCallback<WebSocketEventMap[K]>
+  ): () => void;
+  public on(
+    event: string,
+    callback: WebSocketEventCallback
+  ): () => void;
+  public on(
+    event: string,
+    callback: WebSocketEventCallback
   ): () => void {
     if (!this.events.has(event)) {
       this.events.set(event, new Set());
@@ -33,8 +45,16 @@ export class EventEmitter {
   public once<K extends keyof WebSocketEventMap>(
     event: K,
     callback: WebSocketEventCallback<WebSocketEventMap[K]>
+  ): () => void;
+  public once(
+    event: string,
+    callback: WebSocketEventCallback
+  ): () => void;
+  public once(
+    event: string,
+    callback: WebSocketEventCallback
   ): () => void {
-    const unsubscribe = this.on(event, (data: WebSocketEventMap[K]) => {
+    const unsubscribe = this.on(event, (data: any) => {
       unsubscribe();
       callback(data);
     });
@@ -44,6 +64,14 @@ export class EventEmitter {
   public off<K extends keyof WebSocketEventMap>(
     event: K,
     callback: WebSocketEventCallback<WebSocketEventMap[K]>
+  ): void;
+  public off(
+    event: string,
+    callback: WebSocketEventCallback
+  ): void;
+  public off(
+    event: string,
+    callback: WebSocketEventCallback
   ): void {
     const listeners = this.events.get(event);
     if (listeners) {
@@ -57,6 +85,14 @@ export class EventEmitter {
   public emit<K extends keyof WebSocketEventMap>(
     event: K,
     data: WebSocketEventMap[K]
+  ): void;
+  public emit(
+    event: string,
+    data: any
+  ): void;
+  public emit(
+    event: string,
+    data: any
   ): void {
     const listeners = this.events.get(event);
     if (listeners) {
@@ -70,7 +106,7 @@ export class EventEmitter {
     }
   }
 
-  public removeAllListeners(event?: keyof WebSocketEventMap): void {
+  public removeAllListeners(event?: string): void {
     if (event) {
       this.events.delete(event);
     } else {
@@ -78,7 +114,7 @@ export class EventEmitter {
     }
   }
 
-  public listenerCount(event: keyof WebSocketEventMap): number {
+  public listenerCount(event: string): number {
     return this.events.get(event)?.size || 0;
   }
 

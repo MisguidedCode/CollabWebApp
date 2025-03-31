@@ -45,9 +45,14 @@ describe('Document Storage', () => {
       collaborativeEditingEnabled: false
     },
     permissions: {
-      read: ['user1'],
+      workspaceId: 'workspace1',
+      owner: 'user1',
+      admin: ['user1'],
       write: ['user1'],
-      admin: ['user1']
+      read: ['user1'],
+      editors: ['user1'],
+      readers: ['user1'],
+      commenters: []
     }
   };
 

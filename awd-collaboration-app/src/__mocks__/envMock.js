@@ -5,6 +5,7 @@ const envMock = {
   VITE_FIREBASE_STORAGE_BUCKET: 'test-bucket.appspot.com',
   VITE_FIREBASE_MESSAGING_SENDER_ID: '123456789',
   VITE_FIREBASE_APP_ID: '1:123456789:web:abcdef',
+  VITE_WEBSOCKET_URL: 'ws://localhost:4444',
   MODE: 'test'
 };
 

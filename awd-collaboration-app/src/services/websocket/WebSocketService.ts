@@ -253,7 +253,7 @@ export class WebSocketService {
 
 // Create singleton instance
 export const websocketService = new WebSocketService({
-  url: 'ws://localhost:3001', // Should be configured from environment
+  url: import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:4444',
   reconnectInterval: 1000,
   maxReconnectAttempts: 5,
   heartbeatInterval: 30000,

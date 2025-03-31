@@ -96,7 +96,7 @@ const DocumentEditor: React.FC<DocumentEditorProps> = ({
       }
 
       provider.current = new WebsocketProvider(
-        process.env.VITE_WEBSOCKET_URL || 'ws://localhost:1234',
+        import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:4444',
         `document-${documentId}`,
         ydoc.current,
         {

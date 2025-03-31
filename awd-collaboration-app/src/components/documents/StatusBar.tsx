@@ -20,7 +20,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 }) => (
   <div className="flex items-center justify-between p-2 border-t border-gray-200 bg-gray-50">
     {/* Connection Status */}
-    <div className="flex items-center">
+    <div key="connection-status" className="flex items-center">
       {isConnecting ? (
         <div className="flex items-center text-yellow-600">
           <div className="w-2 h-2 mr-2 rounded-full bg-yellow-500 animate-pulse" />
@@ -41,7 +41,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 
     {/* Auto-save Status */}
     {!readOnly && (
-      <div className="text-sm text-gray-400">
+      <div key="auto-save-status" className="text-sm text-gray-400">
         <span className="flex items-center">
           <div className={`w-1.5 h-1.5 mr-2 rounded-full ${
             nextAutoSaveIn === 0 ? 'bg-blue-400 animate-ping' : 'bg-gray-400'
@@ -59,7 +59,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     )}
 
     {/* Collaborators */}
-    <div className="flex items-center">
+    <div key="collaborators" className="flex items-center">
       <div className="flex -space-x-2 mr-2">
         {Object.values(collaborators).map((collaborator) => (
           <div
